@@ -290,3 +290,9 @@ Cada linha é examinada uma vez, então o tempo é **linear**: a mesma entrada p
 - **Controle 1, saída segura:** dados da API entram na página só por `textContent` (função `el()` de `js/ui.js`). O teste `tests/front.test.js` falha se aparecer `innerHTML`, `outerHTML`, `insertAdjacentHTML` ou `document.write` no JS do front.
 - **Controle 2, CSP sem `'unsafe-inline'`:** os padrões do helmet liberam `style-src 'unsafe-inline'`, então a política foi escrita à mão: `default-src 'self'`, `script-src 'self'`, `script-src-attr 'none'`, `style-src 'self'`, `object-src 'none'`, `frame-ancestors 'none'` (contra clickjacking), `base-uri 'self'` e `form-action 'self'`. O `upgrade-insecure-requests` só é ligado em produção (HTTPS). Um teste confere o cabeçalho e outro garante que os HTML não têm script, estilo ou `on*=` inline.
 - **Comprovação:** num navegador real, uma resposta da API com `<img src=x onerror=...>` e `<script>` nos campos aparece como texto, sem executar nada, e o console fica sem nenhuma violação de CSP.
+
+### Q1 — Promessas sem tratamento no front (PR da #8, regra Sonar S9383, confiabilidade)
+
+- **O que o Sonar apontou:** 3 chamadas de `carregarLista()` em tratadores de evento sem `await`, `.catch()` ou `void`, ou seja, promessas "soltas". Uma promessa rejeitada sem tratamento vira um erro silencioso (*unhandled rejection*): a tela para de atualizar e ninguém fica sabendo por quê. Isso derrubou a nota de confiabilidade do PR para C e reprovou o Quality Gate.
+- **Risco real:** nenhum erro se perdia, porque `carregarLista()` captura as próprias exceções e mostra a mensagem na tela; ela nunca rejeita. Mas o código não deixava essa intenção visível.
+- **Correção:** `recarregarDoInicio()` passou a devolver a promessa e é aguardada com `await` depois de abrir uma OS. Nos tratadores de evento, onde não há o que aguardar, a promessa é ignorada de forma **explícita** com `void carregarLista()`, com um comentário explicando por que é seguro.
