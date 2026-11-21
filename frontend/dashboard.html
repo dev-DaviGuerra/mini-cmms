@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dashboard · Mini-CMMS</title>
+  <link rel="icon" href="img/logo.svg" type="image/svg+xml">
+  <link rel="preload" href="fontes/ibm-plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fontes/ibm-plex-mono-600.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="css/estilo.css">
+  <!-- Chart.js servido pelo próprio site (sem CDN); build UMD define window.Chart -->
+  <script defer src="vendor/chart.umd.min.js"></script>
+  <script type="module" src="js/dashboard.js"></script>
+</head>
+<body class="app">
+  <aside id="menu" class="menu-lateral" aria-label="Menu principal"></aside>
+
+  <main class="conteudo">
+    <header class="cabecalho-pagina">
+      <h1>Dashboard</h1>
+      <fieldset class="periodo" aria-describedby="periodo-ajuda">
+        <legend class="so-leitor-de-tela">Período dos indicadores</legend>
+        <input type="radio" id="periodo-30" name="periodo" value="30">
+        <label for="periodo-30">30 dias</label>
+        <input type="radio" id="periodo-90" name="periodo" value="90" checked>
+        <label for="periodo-90">90 dias</label>
+        <input type="radio" id="periodo-180" name="periodo" value="180">
+        <label for="periodo-180">180 dias</label>
+      </fieldset>
+    </header>
+
+    <div id="mensagem" role="status" hidden></div>
+
+    <!-- situação atual (não depende do período) -->
+    <section aria-labelledby="titulo-agora">
+      <div class="titulo-bloco">
+        <h2 id="titulo-agora">Agora</h2>
+        <span class="tecnica" title="Consulta usada">COUNT(*) FILTER</span>
+      </div>
+      <div class="indicadores indicadores-5">
+        <a class="indicador aberta" href="os.html?status=ABERTA">
+          <span class="indicador-rotulo status aberta">Abertas</span>
+          <span class="indicador-valor" id="kpi-abertas"><span class="skeleton valor"></span></span>
+        </a>
+        <a class="indicador em-andamento" href="os.html?status=EM_ANDAMENTO">
+          <span class="indicador-rotulo status em-andamento">Em andamento</span>
+          <span class="indicador-valor" id="kpi-andamento"><span class="skeleton valor"></span></span>
+        </a>
+        <a class="indicador aguardando-peca" href="os.html?status=AGUARDANDO_PECA">
+          <span class="indicador-rotulo status aguardando-peca">Aguardando peça</span>
+          <span class="indicador-valor" id="kpi-aguardando"><span class="skeleton valor"></span></span>
+        </a>
+        <a class="indicador parados" id="card-parados" href="equipamentos.html">
+          <span class="indicador-rotulo status critico">Máquinas paradas</span>
+          <span class="indicador-valor" id="kpi-parados"><span class="skeleton valor"></span></span>
+        </a>
+        <a class="indicador parados" id="card-alertas" href="estoque.html">
+          <span class="indicador-rotulo status critico">Alertas de estoque</span>
+          <span class="indicador-valor" id="kpi-alertas"><span class="skeleton valor"></span></span>
+        </a>
+      </div>
+    </section>
+
+    <!-- totais do período (sp_kpis_equipamento) -->
+    <section aria-labelledby="titulo-periodo">
+      <div class="titulo-bloco">
+        <h2 id="titulo-periodo">No período <span id="periodo-datas" class="periodo-datas mono"></span></h2>
+        <span class="tecnica" title="Consulta usada">função sp_kpis_equipamento</span>
+      </div>
+      <p id="periodo-ajuda" class="ajuda ajuda-bloco">O filtro de período vale para estes totais e para os gráficos de MTTR e disponibilidade. Os blocos com janela fixa trazem o período no subtítulo.</p>
+      <div class="indicadores">
+        <div class="indicador">
+          <span class="indicador-rotulo">Falhas</span>
+          <span class="indicador-valor" id="tot-falhas"><span class="skeleton valor"></span></span>
+          <span class="indicador-dica">OS corretivas fechadas</span>
+        </div>
+        <div class="indicador">
+          <span class="indicador-rotulo">MTTR médio</span>
+          <span class="indicador-valor" id="tot-mttr"><span class="skeleton valor"></span></span>
+          <span class="indicador-dica">tempo médio para reparar</span>
+        </div>
+        <div class="indicador">
+          <span class="indicador-rotulo">Disponibilidade média</span>
+          <span class="indicador-valor" id="tot-disp"><span class="skeleton valor"></span></span>
+          <span class="indicador-dica">MTBF ÷ (MTBF + MTTR)</span>
+        </div>
+        <div class="indicador">
+          <span class="indicador-rotulo">Custo de manutenção</span>
+          <span class="indicador-valor indicador-valor-moeda" id="tot-custo"><span class="skeleton valor"></span></span>
+          <span class="indicador-dica">peças + horas × R$ 80</span>
+        </div>
+      </div>
+    </section>
+
+    <div class="grade-graficos">
+      <section class="painel painel-grafico" aria-labelledby="titulo-mttr">
+        <div class="painel-grafico-cabecalho">
+          <div>
+            <h2 id="titulo-mttr">MTTR por equipamento</h2>
+            <p class="subtitulo-grafico">Horas, da abertura ao fechamento das OS corretivas</p>
+          </div>
+          <span class="tecnica">função sp_kpis_equipamento</span>
+        </div>
+        <div class="grafico" id="area-mttr"><canvas id="grafico-mttr" role="img"></canvas></div>
+        <details class="dados-grafico"><summary>Ver dados em tabela</summary><div id="tabela-mttr"></div></details>
+      </section>
+
+      <section class="painel painel-grafico" aria-labelledby="titulo-disp">
+        <div class="painel-grafico-cabecalho">
+          <div>
+            <h2 id="titulo-disp">Disponibilidade por equipamento</h2>
+            <p class="subtitulo-grafico" id="subtitulo-disp">%, MTBF ÷ (MTBF + MTTR)</p>
+          </div>
+          <span class="tecnica">função sp_kpis_equipamento</span>
+        </div>
+        <div class="grafico" id="area-disp"><canvas id="grafico-disp" role="img"></canvas></div>
+        <details class="dados-grafico"><summary>Ver dados em tabela</summary><div id="tabela-disp"></div></details>
+      </section>
+
+      <section class="painel painel-grafico largo" aria-labelledby="titulo-pareto">
+        <div class="painel-grafico-cabecalho">
+          <div>
+            <h2 id="titulo-pareto">Pareto das causas de falha</h2>
+            <p class="subtitulo-grafico">% de cada causa e % acumulado · todas as OS corretivas fechadas (janela fixa da consulta)</p>
+          </div>
+          <span class="tecnica">CTE + função de janela</span>
+        </div>
+        <div class="grafico grafico-alto" id="area-pareto"><canvas id="grafico-pareto" role="img"></canvas></div>
+        <details class="dados-grafico"><summary>Ver dados em tabela</summary><div id="tabela-pareto"></div></details>
+      </section>
+
+      <section class="painel painel-grafico" aria-labelledby="titulo-pecas">
+        <div class="painel-grafico-cabecalho">
+          <div>
+            <h2 id="titulo-pecas">Top 5 peças consumidas</h2>
+            <p class="subtitulo-grafico">Unidades nos últimos 30 dias (janela fixa da consulta)</p>
+          </div>
+          <span class="tecnica">JOIN + GROUP BY / HAVING</span>
+        </div>
+        <div class="grafico" id="area-pecas"><canvas id="grafico-pecas" role="img"></canvas></div>
+        <details class="dados-grafico"><summary>Ver dados em tabela</summary><div id="tabela-pecas"></div></details>
+      </section>
+
+      <section class="painel painel-grafico" aria-labelledby="titulo-acima">
+        <div class="painel-grafico-cabecalho">
+          <div>
+            <h2 id="titulo-acima">MTTR acima da média</h2>
+            <p class="subtitulo-grafico">Últimos 90 dias (janela fixa da consulta)</p>
+          </div>
+          <span class="tecnica">subquery</span>
+        </div>
+        <div id="tabela-acima" class="tabela-rolagem"></div>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

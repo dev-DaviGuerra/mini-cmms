@@ -194,7 +194,7 @@ const GRUPOS_MENU = [
       { id: 'os', href: 'os.html', texto: 'Ordens de serviço' },
       { id: 'equipamentos', href: 'equipamentos.html', texto: 'Equipamentos' },
       { id: 'estoque', href: 'estoque.html', texto: 'Estoque' },
-      { id: 'dashboard', texto: 'Dashboard' },
+      { id: 'dashboard', href: 'dashboard.html', texto: 'Dashboard' },
     ],
   },
   {
