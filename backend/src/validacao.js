@@ -30,6 +30,37 @@ export function criarValidador() {
       return n;
     },
 
+    // Número (aceita decimal) entre min e max, obrigatório
+    decimalEntre(valor, campo, min, max) {
+      if (typeof valor !== 'number' || !Number.isFinite(valor) || valor < min || valor > max) {
+        problemas.push(`${campo} deve ser um número entre ${min} e ${max}`);
+        return undefined;
+      }
+      return Math.round(valor * 100) / 100;
+    },
+
+    // Lista de peças do fechamento: [{ pecaId, qtd }], opcional (padrão []), até 20 itens,
+    // sem peça repetida, qtd inteira de 1 a 1000.
+    listaPecas(valor) {
+      if (valor === undefined || valor === null) return [];
+      if (!Array.isArray(valor) || valor.length > 20) {
+        problemas.push('pecas deve ser uma lista de até 20 itens { pecaId, qtd }');
+        return undefined;
+      }
+      const vistos = new Set();
+      const lista = [];
+      valor.forEach((item, i) => {
+        const pecaId = Number(item?.pecaId);
+        const qtd = Number(item?.qtd);
+        if (!Number.isInteger(pecaId) || pecaId <= 0) problemas.push(`pecas[${i}].pecaId deve ser um inteiro positivo`);
+        if (!Number.isInteger(qtd) || qtd < 1 || qtd > 1000) problemas.push(`pecas[${i}].qtd deve ser um inteiro de 1 a 1000`);
+        if (vistos.has(pecaId)) problemas.push(`pecas[${i}]: peça ${pecaId} repetida (some as quantidades)`);
+        vistos.add(pecaId);
+        lista.push({ pecaId, qtd });
+      });
+      return lista;
+    },
+
     opcao(valor, campo, opcoes, { padrao } = {}) {
       if (valor === undefined || valor === null || valor === '') {
         if (padrao === undefined) problemas.push(`${campo} é obrigatório`);

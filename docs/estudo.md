@@ -148,3 +148,26 @@ Por isso os KPIs ficaram em FUNCTION (precisam devolver uma tabela consultável 
 
 3. *Por que limitar a listagem e o que é paginação por `limit`/`offset`?*
    Com o tempo a tabela de OS cresce. Devolver tudo de uma vez deixaria a resposta lenta e pesada, além de permitir que alguém sobrecarregue a API. Com `limit`, cada página tem no máximo N itens; o `offset` diz quantos pular. O `total` permite ao front calcular o número de páginas. A ordenação fixa (`aberta_em DESC, id DESC`) garante que as páginas não repitam nem pulem itens. O `id` desempata OS abertas no mesmo instante.
+
+---
+
+## Etapa 5 — Fechar OS com transação e rollback (issue #5)
+
+**O que foi feito**
+
+1. `POST /api/os/:id/fechar` aceita o técnico **que assumiu** a OS ou um SUPERVISOR, e só OS `EM_ANDAMENTO` ou `AGUARDANDO_PECA`. Em uma única transação: trava a OS e o equipamento; para cada peça faz o `UPDATE ... WHERE estoque >= qtd`, grava `os_pecas` com o custo do momento e a movimentação `SAIDA`; marca a OS como `FECHADA`; e, por fim, devolve o equipamento a `OPERANDO`.
+2. O equipamento só volta a `OPERANDO` se **não existir outra OS pendente** para ele (`ABERTA`, `EM_ANDAMENTO` ou `AGUARDANDO_PECA`), verificado com um `NOT EXISTS` no próprio UPDATE. Uma OS esperando peça significa que o defeito ainda não foi consertado, então ela também mantém o equipamento `PARADO`.
+3. Se faltar estoque, a transação inteira sofre **ROLLBACK** e a resposta é 409 `ESTOQUE_INSUFICIENTE`, com a peça, o solicitado e o disponível. Depois, uma **segunda transação, separada**, muda só o status da OS para `AGUARDANDO_PECA`, com auditoria. Peça inexistente devolve 404, também com rollback, mas sem mudar o status.
+4. Depois que o supervisor repõe o estoque com `CALL sp_entrada_estoque`, o técnico fecha de novo a OS em `AGUARDANDO_PECA`. O teste do ciclo completo cobre isto: 409 → `AGUARDANDO_PECA` → `CALL` → 200 `FECHADA` → alerta resolvido.
+5. São 10 testes novos. O teste de rollback compara uma "fotografia" de estoque, `os_pecas`, movimentações e alertas antes e depois da tentativa. Um **teste de mutação** (trocar `ROLLBACK` por `COMMIT` em `db.js`) fez esse teste falhar, o que prova que ele detecta um rollback ausente.
+
+**Perguntas prováveis**
+
+1. *Por que colocar a OS em `AGUARDANDO_PECA` numa transação separada, e não na mesma?*
+   Porque a transação do fechamento **precisa** ser desfeita por inteiro. Ela pode já ter baixado a peça anterior, gravado `os_pecas` e criado um alerta pela trigger. Só o ROLLBACK garante que nada disso fica. Se a mudança para `AGUARDANDO_PECA` estivesse dentro dela, seria desfeita junto. Então primeiro desfazemos tudo e depois registramos, numa transação nova e pequena, só o fato de que a OS está esperando peça. O UPDATE dela tem `WHERE status = 'EM_ANDAMENTO'`, então não mexe numa OS que, nesse meio tempo, mudou de estado.
+
+2. *O que garante que dois técnicos usando a mesma peça ao mesmo tempo não deixam o estoque negativo?*
+   Três camadas. (1) O `UPDATE pecas SET estoque = estoque - qtd WHERE id = $1 AND estoque >= qtd` é atômico: o PostgreSQL trava a linha da peça, e a segunda transação espera e reavalia o `WHERE` com o saldo novo, falhando se ele não for suficiente. (2) O `CHECK (estoque >= 0)` da tabela é a última barreira. (3) As peças são baixadas sempre **em ordem de id**. Assim duas transações nunca travam as mesmas peças em ordem inversa, o que causaria um *deadlock*.
+
+3. *Por que travar o equipamento (`FOR UPDATE`) se o fechamento só atualiza o status dele no fim?*
+   Por causa da regra "só volta a OPERANDO se não houver outra OS pendente". Se duas OS do mesmo equipamento fossem fechadas ao mesmo tempo sem a trava, cada transação enxergaria a outra ainda `EM_ANDAMENTO` (sem COMMIT) e nenhuma liberaria o equipamento. Ele ficaria `PARADO` para sempre. Com a trava, a segunda espera a primeira dar COMMIT. No nível READ COMMITTED, cada comando vê os dados já confirmados, então o `NOT EXISTS` da segunda enxerga a primeira como `FECHADA` e libera o equipamento.

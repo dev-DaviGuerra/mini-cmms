@@ -1,7 +1,7 @@
 // Regras de negócio das ordens de serviço (OS).
 // Toda escrita roda em transacao(), que grava app.usuario_id para a auditoria.
 import { query, transacao } from '../db.js';
-import { ErroConflito, ErroNaoEncontrado } from '../errors.js';
+import { ErroConflito, ErroNaoEncontrado, ErroProibido } from '../errors.js';
 
 export const TIPOS = Object.freeze(['CORRETIVA', 'PREVENTIVA']);
 export const PRIORIDADES = Object.freeze(['BAIXA', 'MEDIA', 'ALTA', 'EMERGENCIA']);
@@ -51,11 +51,13 @@ async function travarOs(client, id) {
   return rows[0];
 }
 
+// esperado: um status ou uma lista de status aceitos
 function exigirStatus(os, esperado, acao) {
-  if (os.status !== esperado) {
+  const aceitos = [esperado].flat();
+  if (!aceitos.includes(os.status)) {
     throw new ErroConflito(
       'STATUS_INVALIDO',
-      `Não é possível ${acao} a OS ${os.id}: status atual ${os.status}, esperado ${esperado}`,
+      `Não é possível ${acao} a OS ${os.id}: status atual ${os.status}, esperado ${aceitos.join(' ou ')}`,
       { statusAtual: os.status, statusEsperado: esperado },
     );
   }
@@ -74,6 +76,94 @@ export async function assumirOs(id, tecnicoId) {
       [tecnicoId, id],
     );
   });
+  return buscarOs(id);
+}
+
+// Baixa de UMA peça: UPDATE condicional (só baixa se houver saldo). Se nenhuma linha for
+// afetada, descobre se a peça não existe (404) ou se falta estoque (409).
+async function baixarPeca(client, { pecaId, qtd }) {
+  const r = await client.query(
+    `UPDATE pecas SET estoque = estoque - $1
+      WHERE id = $2 AND estoque >= $1
+     RETURNING custo_unit`,
+    [qtd, pecaId],
+  );
+  if (r.rowCount) return r.rows[0].custo_unit;
+
+  const { rows } = await client.query('SELECT codigo, estoque FROM pecas WHERE id = $1', [pecaId]);
+  if (!rows.length) throw new ErroNaoEncontrado(`Peça ${pecaId} não encontrada`);
+  throw new ErroConflito(
+    'ESTOQUE_INSUFICIENTE',
+    `Estoque insuficiente da peça ${rows[0].codigo}: solicitado ${qtd}, disponível ${rows[0].estoque}`,
+    { pecaId, codigo: rows[0].codigo, solicitado: qtd, disponivel: rows[0].estoque },
+  );
+}
+
+// Fechar OS (H4) — transação principal do DBE2. Tudo ou nada:
+//   1. trava OS e equipamento; confere status (EM_ANDAMENTO ou AGUARDANDO_PECA) e permissão
+//   2. para cada peça: baixa condicional do estoque, os_pecas (custo do momento), movimentação SAIDA
+//   3. OS -> FECHADA com fechada_em, horas, causa e solução
+//   4. equipamento -> OPERANDO, só se não houver OUTRA OS pendente para ele
+//      (ABERTA, EM_ANDAMENTO ou AGUARDANDO_PECA: todas mantêm o equipamento PARADO)
+//   5. COMMIT. Qualquer erro => ROLLBACK (nada do que foi feito acima fica gravado).
+// Se o erro for estoque insuficiente, uma SEGUNDA transação, separada, coloca a OS em
+// AGUARDANDO_PECA (a primeira já foi desfeita, então só o status muda) e o 409 é repassado.
+export async function fecharOs(id, { causa, solucao, horas, pecas }, usuario) {
+  // ordem fixa de travamento das peças (por id) evita deadlock entre dois fechamentos
+  const pecasOrdenadas = [...pecas].sort((a, b) => a.pecaId - b.pecaId);
+
+  try {
+    await transacao(usuario.id, async (client) => {
+      const os = await travarOs(client, id);
+      exigirStatus(os, ['EM_ANDAMENTO', 'AGUARDANDO_PECA'], 'fechar');
+      if (usuario.perfil === 'TECNICO' && os.tecnico_id !== usuario.id) {
+        throw new ErroProibido('Só o técnico que assumiu a OS (ou um supervisor) pode fechá-la');
+      }
+
+      // trava o equipamento: dois fechamentos de OS do mesmo equipamento ficam em fila,
+      // e o segundo já enxerga o primeiro como FECHADA na verificação do passo 4
+      await client.query('SELECT id FROM equipamentos WHERE id = $1 FOR UPDATE', [os.equipamento_id]);
+
+      for (const peca of pecasOrdenadas) {
+        const custoUnit = await baixarPeca(client, peca);
+        await client.query(
+          'INSERT INTO os_pecas (os_id, peca_id, qtd, custo_unit) VALUES ($1, $2, $3, $4)',
+          [id, peca.pecaId, peca.qtd, custoUnit],
+        );
+        await client.query(
+          `INSERT INTO movimentacoes (peca_id, tipo, qtd, os_id, usuario_id)
+           VALUES ($1, 'SAIDA', $2, $3, $4)`,
+          [peca.pecaId, peca.qtd, id, usuario.id],
+        );
+      }
+
+      await client.query(
+        `UPDATE ordens_servico
+            SET status = 'FECHADA', fechada_em = now(), horas = $1, causa = $2, solucao = $3
+          WHERE id = $4`,
+        [horas, causa, solucao, id],
+      );
+
+      await client.query(
+        `UPDATE equipamentos SET status = 'OPERANDO'
+          WHERE id = $1
+            AND NOT EXISTS (SELECT 1 FROM ordens_servico
+                             WHERE equipamento_id = $1 AND id <> $2
+                               AND status IN ('ABERTA', 'EM_ANDAMENTO', 'AGUARDANDO_PECA'))`,
+        [os.equipamento_id, id],
+      );
+    });
+  } catch (erro) {
+    if (erro.codigo === 'ESTOQUE_INSUFICIENTE') {
+      await transacao(usuario.id, (client) => client.query(
+        `UPDATE ordens_servico SET status = 'AGUARDANDO_PECA'
+          WHERE id = $1 AND status = 'EM_ANDAMENTO'`,
+        [id],
+      ));
+    }
+    throw erro;
+  }
+
   return buscarOs(id);
 }
 

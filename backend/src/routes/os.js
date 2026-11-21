@@ -61,4 +61,22 @@ router.get('/:id', async (req, res) => {
   res.json(await osService.buscarOs(id));
 });
 
+// POST /api/os/:id/fechar  { causa, solucao, horas, pecas?: [{ pecaId, qtd }] }  ->  200 + OS FECHADA
+// TECNICO (só o que assumiu) ou SUPERVISOR. Só OS EM_ANDAMENTO ou AGUARDANDO_PECA.
+// Estoque insuficiente => 409 ESTOQUE_INSUFICIENTE e a OS passa a AGUARDANDO_PECA.
+router.post('/:id/fechar', exigirPerfil('TECNICO', 'SUPERVISOR'), async (req, res) => {
+  const v = criarValidador();
+  const body = req.body ?? {};
+  const id = v.inteiroPositivo(req.params.id, 'id');
+  const dados = {
+    causa: v.texto(body.causa, 'causa', { min: 2, max: 100 }),
+    solucao: v.texto(body.solucao, 'solucao', { min: 5, max: 2000 }),
+    horas: v.decimalEntre(body.horas, 'horas', 0.1, 999),
+    pecas: v.listaPecas(body.pecas),
+  };
+  v.verificar('Dados de fechamento inválidos');
+
+  res.json(await osService.fecharOs(id, dados, req.usuario));
+});
+
 export default router;
