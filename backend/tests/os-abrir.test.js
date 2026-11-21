@@ -103,8 +103,9 @@ describe('GET /api/os e /api/os/:id', () => {
       .get(`/api/os?equipamentoId=${equipamento.id}&status=ABERTA`)
       .set('Authorization', `Bearer ${tokens.TECNICO}`);
     assert.equal(res.status, 200);
-    assert.equal(res.body.length, 1);
-    assert.equal(res.body[0].equipamento_tag, equipamento.tag);
+    assert.equal(res.body.dados.length, 1);
+    assert.deepEqual(res.body.paginacao, { limit: 50, offset: 0, total: 1 });
+    assert.equal(res.body.dados[0].equipamento_tag, equipamento.tag);
   });
 
   test('filtro inválido: 400', async () => {
@@ -116,7 +117,7 @@ describe('GET /api/os e /api/os/:id', () => {
     const lista = await request(app)
       .get(`/api/os?equipamentoId=${equipamento.id}`)
       .set('Authorization', `Bearer ${tokens.OPERADOR}`);
-    const id = lista.body[0].id;
+    const id = lista.body.dados[0].id;
 
     const ok = await request(app).get(`/api/os/${id}`).set('Authorization', `Bearer ${tokens.OPERADOR}`);
     assert.equal(ok.status, 200);

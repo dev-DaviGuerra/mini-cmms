@@ -1,7 +1,7 @@
 // Regras de negócio das ordens de serviço (OS).
 // Toda escrita roda em transacao(), que grava app.usuario_id para a auditoria.
 import { query, transacao } from '../db.js';
-import { ErroNaoEncontrado } from '../errors.js';
+import { ErroConflito, ErroNaoEncontrado } from '../errors.js';
 
 export const TIPOS = Object.freeze(['CORRETIVA', 'PREVENTIVA']);
 export const PRIORIDADES = Object.freeze(['BAIXA', 'MEDIA', 'ALTA', 'EMERGENCIA']);
@@ -40,8 +40,46 @@ export async function abrirOs({ equipamentoId, tipo, prioridade, descricao }, us
   return buscarOs(osId);
 }
 
-// Lista OS com filtros opcionais. Os filtros entram como parâmetros ($n), nunca no texto.
-export async function listarOs({ status, prioridade, equipamentoId, limite = 50 }) {
+// Lê a OS travando a linha (FOR UPDATE) até o fim da transação. Duas requisições
+// simultâneas sobre a mesma OS ficam em fila: a segunda já enxerga o status novo.
+async function travarOs(client, id) {
+  const { rows } = await client.query(
+    'SELECT id, equipamento_id, status, tecnico_id FROM ordens_servico WHERE id = $1 FOR UPDATE',
+    [id],
+  );
+  if (!rows.length) throw new ErroNaoEncontrado(`OS ${id} não encontrada`);
+  return rows[0];
+}
+
+function exigirStatus(os, esperado, acao) {
+  if (os.status !== esperado) {
+    throw new ErroConflito(
+      'STATUS_INVALIDO',
+      `Não é possível ${acao} a OS ${os.id}: status atual ${os.status}, esperado ${esperado}`,
+      { statusAtual: os.status, statusEsperado: esperado },
+    );
+  }
+}
+
+// Assumir OS (H3): só OS ABERTA. Grava técnico, início e status EM_ANDAMENTO.
+// A trigger trg_auditoria_os registra ABERTA -> EM_ANDAMENTO com o usuário de app.usuario_id.
+export async function assumirOs(id, tecnicoId) {
+  await transacao(tecnicoId, async (client) => {
+    const os = await travarOs(client, id);
+    exigirStatus(os, 'ABERTA', 'assumir');
+    await client.query(
+      `UPDATE ordens_servico
+          SET status = 'EM_ANDAMENTO', tecnico_id = $1, iniciada_em = now()
+        WHERE id = $2`,
+      [tecnicoId, id],
+    );
+  });
+  return buscarOs(id);
+}
+
+// Lista OS com filtros opcionais e paginação (limit/offset).
+// Os filtros entram como parâmetros ($n), nunca concatenados no texto do SQL.
+export async function listarOs({ status, prioridade, equipamentoId, limit, offset }) {
   const condicoes = [];
   const parametros = [];
   const filtrar = (sql, valor) => {
@@ -52,16 +90,19 @@ export async function listarOs({ status, prioridade, equipamentoId, limite = 50 
   if (status) filtrar('os.status =', status);
   if (prioridade) filtrar('os.prioridade =', prioridade);
   if (equipamentoId) filtrar('os.equipamento_id =', equipamentoId);
-
-  parametros.push(limite);
   const where = condicoes.length ? `WHERE ${condicoes.join(' AND ')}` : '';
-  const { rows } = await query(
-    `SELECT ${COLUNAS_OS} ${FROM_OS} ${where}
-     ORDER BY os.aberta_em DESC, os.id DESC
-     LIMIT $${parametros.length}`,
-    parametros,
-  );
-  return rows;
+
+  const [total, pagina] = await Promise.all([
+    query(`SELECT COUNT(*)::int AS total FROM ordens_servico os ${where}`, parametros),
+    query(
+      `SELECT ${COLUNAS_OS} ${FROM_OS} ${where}
+       ORDER BY os.aberta_em DESC, os.id DESC
+       LIMIT $${parametros.length + 1} OFFSET $${parametros.length + 2}`,
+      [...parametros, limit, offset],
+    ),
+  ]);
+
+  return { dados: pagina.rows, paginacao: { limit, offset, total: total.rows[0].total } };
 }
 
 // Detalhe da OS com peças usadas e histórico de auditoria (H9).

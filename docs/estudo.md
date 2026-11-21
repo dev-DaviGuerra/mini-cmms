@@ -125,3 +125,26 @@ Por isso os KPIs ficaram em FUNCTION (precisam devolver uma tabela consultável 
 
 3. *Para que serve o `FOR UPDATE` no equipamento?*
    Ele trava a linha do equipamento até o fim da transação. Se dois operadores abrirem OS para o mesmo equipamento ao mesmo tempo, a segunda transação espera a primeira terminar. Assim as duas não leem e atualizam o equipamento simultaneamente. Esse controle de concorrência é ainda mais importante no fechamento da OS, com a baixa de estoque.
+
+---
+
+## Etapa 4 — Assumir OS (issue #4)
+
+**O que foi feito**
+
+1. `POST /api/os/:id/assumir` aceita só o perfil TECNICO (403 para os outros) e só OS com status `ABERTA`. Qualquer outro status devolve **409 `STATUS_INVALIDO`**, informando o status atual e o esperado.
+2. Tudo roda em `transacao()`, que faz `set_config('app.usuario_id', id, true)` **antes** do UPDATE. Assim a trigger `trg_auditoria_os` grava `ABERTA → EM_ANDAMENTO` com o técnico correto, e o teste confere isso.
+3. A OS é lida com `SELECT ... FOR UPDATE` (`travarOs`). Num teste, dois técnicos assumem a mesma OS **ao mesmo tempo**: um recebe 200, o outro 409, e a auditoria registra só uma mudança.
+4. `GET /api/os` ganhou paginação `limit`/`offset` (padrão 50, máximo 200). A resposta passou a ser `{ dados, paginacao: { limit, offset, total } }`, e o `total` vem de um `COUNT(*)` com os mesmos filtros.
+5. São 7 testes novos: assumir com auditoria, 409 por status, concorrência, 403 do operador e do supervisor, 404/400/401, páginas sem repetição e limites inválidos.
+
+**Perguntas prováveis**
+
+1. *Por que 409 e não 400 quando a OS já foi assumida?*
+   O 400 diz que a **requisição** está mal formada. Aqui ela está correta, mas conflita com o **estado atual** do recurso: a OS não está mais `ABERTA`. É exatamente o caso do 409 Conflict. O cliente sabe que, se repetir a mesma chamada, vai receber o mesmo erro até o estado mudar.
+
+2. *Sem o `FOR UPDATE`, o que aconteceria com dois técnicos clicando em "Assumir" juntos?*
+   As duas transações leriam `status = ABERTA` ao mesmo tempo, as duas passariam na verificação e as duas fariam o UPDATE. O segundo sobrescreveria o `tecnico_id` do primeiro: uma *lost update*, com duas linhas de auditoria. Com o `FOR UPDATE`, a segunda transação espera a primeira dar COMMIT e então lê `EM_ANDAMENTO` e recebe 409. Outra solução seria o UPDATE condicional `... WHERE id = $1 AND status = 'ABERTA'`, verificando o `rowCount`. Preferi travar e ler porque isso permite responder 404 ou 409 com a mensagem certa.
+
+3. *Por que limitar a listagem e o que é paginação por `limit`/`offset`?*
+   Com o tempo a tabela de OS cresce. Devolver tudo de uma vez deixaria a resposta lenta e pesada, além de permitir que alguém sobrecarregue a API. Com `limit`, cada página tem no máximo N itens; o `offset` diz quantos pular. O `total` permite ao front calcular o número de páginas. A ordenação fixa (`aberta_em DESC, id DESC`) garante que as páginas não repitam nem pulem itens. O `id` desempata OS abertas no mesmo instante.
