@@ -220,9 +220,32 @@ Por isso os KPIs ficaram em FUNCTION (precisam devolver uma tabela consultável 
 
 ---
 
+## Etapa 8 — Front: login e lista de OS (issue #8)
+
+**O que foi feito**
+
+1. O front é HTML + CSS + JavaScript puro com ES Modules, sem framework e sem build. Em desenvolvimento, o Express serve a pasta `frontend/` (`express.static`); no deploy será o NGINX.
+2. `js/api.js` centraliza o `fetch`: envia o JWT guardado no `sessionStorage`, converte `{ erro: { codigo, mensagem } }` em `ErroApi` e, num 401 com sessão aberta, limpa a sessão e volta ao login com "sessão expirou".
+3. O login guarda o token e vai para `os.html`. A lista tem filtros por status, prioridade e equipamento, badges coloridos e paginação de 20 em 20. O botão "+ Nova OS" aparece só para OPERADOR e SUPERVISOR; o formulário confere os campos na tela e mostra os erros da API.
+4. Segurança: toda informação vinda da API entra por `textContent`, nunca por `innerHTML`. A CSP do helmet foi escrita à mão, sem `'unsafe-inline'`: nenhum `<script>` inline, `style=""` ou `onclick` no HTML. Há testes de backend que falham se algum desses aparecer.
+5. Testei num navegador real (Edge headless com puppeteer), em 18 verificações: login errado e certo, paginação, filtros, abertura de OS, botão por perfil, 401, saída, **XSS** (dados maliciosos aparecem como texto e não executam) e **nenhuma violação de CSP** no console.
+
+**Perguntas prováveis**
+
+1. *O que é XSS e como o front se protege?*
+   *Cross-Site Scripting* acontece quando um texto controlado pelo atacante é interpretado como HTML/JavaScript na página de outro usuário. Por exemplo, um operador que escreve `<img src=x onerror="enviar(sessionStorage.token)">` na descrição da OS; quando o supervisor abre a lista, o código rodaria no navegador dele. O front usa só `textContent` para dados da API, então o navegador mostra o texto literalmente e não o interpreta. A CSP é a **segunda camada**: mesmo que algum HTML escapasse, scripts inline e atributos `onerror` seriam bloqueados pelo navegador. No teste, injetei exatamente esse tipo de texto e conferi que ele aparece como texto e não executa.
+
+2. *Por que `sessionStorage` e não `localStorage` ou cookie?*
+   O `sessionStorage` é apagado ao fechar a aba ou o navegador, então um token esquecido num computador compartilhado da fábrica não fica valendo por 8 horas. O `localStorage` persiste indefinidamente. Um cookie `HttpOnly` seria ainda mais protegido contra XSS, porque o JavaScript não consegue lê-lo, mas exigiria proteção contra CSRF e mudanças na API. Com XSS bloqueado por `textContent` e CSP, o `sessionStorage` é um equilíbrio razoável para o escopo do projeto.
+
+3. *Se o botão "Nova OS" está escondido para o técnico, ele não consegue abrir uma OS?*
+   Pela tela não, mas esconder o botão é só **usabilidade**, não segurança. Um técnico pode chamar a API direto, com curl ou pelo console do navegador. Quem impede é a API: o `exigirPerfil('OPERADOR', 'SUPERVISOR')` responde 403, e isso está testado. A regra é que o front nunca é a barreira de segurança, porque o usuário controla tudo o que roda no navegador.
+
+---
+
 ## Segurança (QSS)
 
-Registro das correções de segurança apontadas pelo SonarCloud, para o relatório do QSS.
+Registro das correções e dos controles de segurança, para o relatório do QSS.
 
 ### S1 — ReDoS na leitura das consultas BD2 (PR #22, regra Sonar S5852, severidade crítica)
 
@@ -261,3 +284,9 @@ Cada linha é examinada uma vez, então o tempo é **linear**: a mesma entrada p
 
 3. *Por que o ReDoS é tão grave no Node.js em particular?*
    Porque o Node executa o JavaScript num único *event loop*. Uma regex presa em backtracking ocupa essa thread, e todas as outras requisições, inclusive as de outros usuários, ficam esperando. Com 50 caracteres, um atacante segura a API por 10 segundos. Repetindo a chamada, deixa o sistema indisponível.
+
+### S2 — XSS e Content-Security-Policy no front (PR da #8)
+
+- **Controle 1, saída segura:** dados da API entram na página só por `textContent` (função `el()` de `js/ui.js`). O teste `tests/front.test.js` falha se aparecer `innerHTML`, `outerHTML`, `insertAdjacentHTML` ou `document.write` no JS do front.
+- **Controle 2, CSP sem `'unsafe-inline'`:** os padrões do helmet liberam `style-src 'unsafe-inline'`, então a política foi escrita à mão: `default-src 'self'`, `script-src 'self'`, `script-src-attr 'none'`, `style-src 'self'`, `object-src 'none'`, `frame-ancestors 'none'` (contra clickjacking), `base-uri 'self'` e `form-action 'self'`. O `upgrade-insecure-requests` só é ligado em produção (HTTPS). Um teste confere o cabeçalho e outro garante que os HTML não têm script, estilo ou `on*=` inline.
+- **Comprovação:** num navegador real, uma resposta da API com `<img src=x onerror=...>` e `<script>` nos campos aparece como texto, sem executar nada, e o console fica sem nenhuma violação de CSP.

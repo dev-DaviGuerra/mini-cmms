@@ -118,6 +118,23 @@ Toda resposta de erro tem o formato `{ "erro": { "codigo", "mensagem", "detalhes
 | 404 | não encontrado |
 | 409 | estoque insuficiente ou status inválido |
 
+## Front
+
+HTML + CSS + JavaScript puro (ES Modules), sem framework e sem build, na pasta `frontend/`.
+Em desenvolvimento, o próprio Express serve a pasta: com a API rodando (`npm start` em `backend/`),
+abra **http://localhost:3000**. No deploy, quem serve os arquivos é o NGINX.
+
+| Página | Conteúdo |
+|---|---|
+| `index.html` | login (o JWT fica no `sessionStorage`) |
+| `os.html` | lista de OS com filtros e paginação; "+ Nova OS" para OPERADOR e SUPERVISOR |
+
+Segurança no front:
+- todo dado vindo da API entra na página por `textContent`, nunca por `innerHTML` (contra XSS);
+- a CSP permite só scripts e estilos do próprio site (`'self'`), sem `'unsafe-inline'`;
+- `js/api.js` envia o token e, num 401, encerra a sessão e volta ao login;
+- a tela esconde botões conforme o perfil, mas quem garante a permissão é sempre a API.
+
 ## Fluxo de trabalho
 - Uma issue por funcionalidade, board no GitHub Projects (To Do / In Progress / Done).
 - Branch `feature/<issue>-<nome>`, commits pequenos, PR com `Closes #N`, revisão e merge na `main`.
