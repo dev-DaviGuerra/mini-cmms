@@ -34,6 +34,17 @@ deploy, SonarCloud, artigo, slides.
 4. Ao terminar cada etapa, adicionar em `docs/estudo.md`: explicação de 5 linhas do que foi feito
    + 3 perguntas que um professor poderia fazer, com as respostas.
 5. Nunca commitar `.env`. Manter `.env.example` sem segredos reais.
+6. **Nunca sobrescrever o `backend/.env`.** Proibido rodar `cp`, `mv`, redirecionamento `>`,
+   `writeFileSync`, Write/Edit ou qualquer comando que substitua esse arquivo. Para alterá-lo,
+   **só acrescentar linhas no fim** (`>>` ou `fs.appendFileSync`). O dotenv usa a última
+   ocorrência de uma chave, então acrescentar basta para trocar um valor. Nunca exibir os valores
+   do `.env`.
+   *Motivo:* em 21/11 um comando sobrescreveu o `.env` com o `.env.example` e as credenciais do
+   Neon tiveram de ser trocadas.
+7. Para gerar arquivos com texto que contenha crases (Markdown), usar a ferramenta Write ou um
+   heredoc com delimitador entre aspas simples (`<<'EOF'`). Nunca usar texto com crases dentro de
+   aspas duplas no shell: o bash executa o conteúdo das crases como comando. Foi assim que o
+   `.env` foi sobrescrito.
 
 ## Decisões de negócio (seção 6.2 do PDF)
 - Prioridades: BAIXA / MEDIA / ALTA / EMERGENCIA.
