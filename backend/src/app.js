@@ -3,6 +3,7 @@ import express from 'express';
 import helmet from 'helmet';
 import { rateLimit } from 'express-rate-limit';
 import authRoutes from './routes/auth.js';
+import osRoutes from './routes/os.js';
 import { rotaNaoEncontrada, tratarErros } from './middlewares/erros.js';
 
 export const app = express();
@@ -26,6 +27,7 @@ app.use('/api', rateLimit({
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 app.use('/api/auth', authRoutes);
+app.use('/api/os', osRoutes);
 
 app.use(rotaNaoEncontrada);
 app.use(tratarErros);
