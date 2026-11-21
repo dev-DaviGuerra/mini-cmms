@@ -8,6 +8,10 @@ import { rotaNaoEncontrada, tratarErros } from './middlewares/erros.js';
 export const app = express();
 
 app.disable('x-powered-by');
+// Em produção a API fica atrás do NGINX (1 proxy). Com isso o Express usa o IP real do
+// cliente (cabeçalho X-Forwarded-For) e o rate limit conta por cliente, não pelo NGINX.
+// "1" = confia só no proxy imediatamente à frente; não aceita X-Forwarded-For forjado em cadeia.
+app.set('trust proxy', 1);
 app.use(helmet());                                 // cabeçalhos de segurança HTTP
 app.use(express.json({ limit: '100kb' }));         // corpo JSON com tamanho limitado
 
