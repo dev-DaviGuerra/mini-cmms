@@ -98,6 +98,15 @@ desenvolvimento. Os testes criam e apagam os próprios usuários, equipamentos e
 | POST | `/api/pecas` | SUPERVISOR | `{ codigo, descricao, estoqueMin, custoUnit }` → 201, com estoque 0; código duplicado: 409 `CODIGO_DUPLICADO` |
 | POST | `/api/pecas/:id/entrada` | SUPERVISOR | `{ qtd }` → `CALL sp_entrada_estoque`: soma o estoque, grava ENTRADA e resolve alertas → `{ peca, alertasResolvidos }` |
 | GET | `/api/alertas` | SUPERVISOR | alertas de estoque mínimo pendentes |
+| GET | `/api/kpis?inicio=&fim=` | qualquer logado | `sp_kpis_equipamento` por equipamento (datas `AAAA-MM-DD`; padrão: últimos 90 dias) → `{ inicio, fim, equipamentos }` |
+| GET | `/api/kpis/resumo` | qualquer logado | cards: OS abertas, em andamento, aguardando peça, equipamentos parados, alertas pendentes |
+| GET | `/api/kpis/mttr-acima-media` | qualquer logado | consulta BD2 nº 1 (subquery) |
+| GET | `/api/kpis/top-pecas` | qualquer logado | consulta BD2 nº 2 (top 5 peças em 30 dias) |
+| GET | `/api/kpis/pareto-causas` | qualquer logado | consulta BD2 nº 3 (CTE + janela) |
+
+As três rotas BD2 executam o SQL **do próprio** `database/04_consultas_bd2.sql`. A API lê o
+arquivo ao subir e separa as consultas pelos marcadores `-- @consulta <nome>`. Assim, o psql e a
+API rodam o mesmo texto.
 
 Toda resposta de erro tem o formato `{ "erro": { "codigo", "mensagem", "detalhes" } }`:
 

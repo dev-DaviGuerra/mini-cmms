@@ -194,3 +194,26 @@ Por isso os KPIs ficaram em FUNCTION (precisam devolver uma tabela consultável 
 
 3. *A rota de entrada chama uma PROCEDURE: como a API sabe o que aconteceu, se ela não devolve linhas?*
    A procedure faz o trabalho (UPDATE, INSERT, resolver alertas), e a API consulta o resultado **na mesma transação**: conta os alertas pendentes antes e depois do `CALL`, e lê a peça atualizada no fim. É a divisão típica: a procedure executa a ação, e as consultas (ou funções) leem o estado. Como a procedure não faz COMMIT própria, tudo é confirmado de uma vez pelo `transacao()`.
+
+---
+
+## Etapa 7 — KPIs e consultas BD2 na API (issue #7)
+
+**O que foi feito**
+
+1. `GET /api/kpis?inicio=&fim=` chama a função `sp_kpis_equipamento`. Sem datas, usa os últimos 90 dias até hoje, calculados **no banco** (`CURRENT_DATE`). As datas são validadas (formato e calendário; `inicio <= fim`), e os `NUMERIC` viram números no JSON.
+2. `GET /api/kpis/resumo` devolve numa consulta só os totais dos cards do dashboard: OS abertas, em andamento e aguardando peça, equipamentos parados e alertas pendentes.
+3. As 3 consultas BD2 viraram rotas (`mttr-acima-media`, `top-pecas`, `pareto-causas`) **sem copiar o SQL**. A API lê o `database/04_consultas_bd2.sql` ao subir, separa as consultas pelos marcadores `-- @consulta <nome>` e ignora os comandos `\echo` do psql. Conferi que o psql e a API devolvem os mesmos números.
+4. Todas as rotas aceitam qualquer usuário logado (401 sem token).
+5. São 9 testes novos, com um cenário pequeno montado à mão (MTTR 3h e 1h, custo, OS pendentes, saídas dentro e fora dos 30 dias), cujos resultados foram calculados no papel. O teste de datas pegou um bug real: um mês inválido gerava erro 500 em vez de 400.
+
+**Perguntas prováveis**
+
+1. *Por que a API lê o arquivo `.sql` em vez de ter as consultas no código JavaScript?*
+   Para ter **uma única fonte da verdade**. Se o SQL estivesse copiado no JavaScript, uma correção feita no arquivo da disciplina de BD2 poderia não chegar à API, e o professor veria no dashboard um resultado diferente do que roda no psql. Lendo o arquivo, os dois sempre executam o mesmo texto. O parser recusa trechos que não sejam `SELECT`/`WITH`, então ninguém consegue, por engano, transformar uma rota de leitura num `DELETE`.
+
+2. *Como você sabe que os números de MTTR, MTBF e disponibilidade estão certos?*
+   O teste monta um cenário que dá para calcular à mão. O equipamento E1 tem duas falhas, com reparos de 2h e 4h: MTTR = 6 ÷ 2 = 3h. O período de 90 dias, inclusivo, tem 91 dias = 2184h; o tempo operando é 2184 − 6 = 2178h, então MTBF = 2178 ÷ 2 = 1089h e disponibilidade = 1089 ÷ (1089 + 3) = 99,73%. O custo é 6h × R$ 80 + 2 peças × R$ 10 = R$ 500. A API precisa devolver exatamente esses valores.
+
+3. *Por que as datas padrão são calculadas no banco e não no Node?*
+   Porque "hoje" depende do fuso horário. O servidor Node e o banco podem estar em fusos diferentes (a VM da Azure normalmente usa UTC, e o Brasil está em UTC−3). Perto da meia-noite, os dois discordariam do dia. Usando `CURRENT_DATE` do PostgreSQL, a data padrão é coerente com os `TIMESTAMPTZ` que a função compara. Pelo mesmo motivo, as datas voltam como texto `AAAA-MM-DD`, e não como objeto `Date` do JavaScript, que aplicaria o fuso local.
