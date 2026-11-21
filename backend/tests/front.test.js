@@ -88,6 +88,16 @@ describe('front estático e CSP', () => {
     }
   });
 
+  test('Chart.js servido localmente (sem CDN) e sem eval/new Function (compatível com a CSP)', async () => {
+    const res = await request(app).get('/vendor/chart.umd.min.js');
+    assert.equal(res.status, 200);
+    assert.match(res.headers['content-type'], /javascript/);
+    const codigo = readFileSync(new URL('vendor/chart.umd.min.js', PASTA_FRONT), 'utf8');
+    assert.doesNotMatch(codigo, /\beval\(|new Function\(/, 'exigiria unsafe-eval na CSP');
+    const dashboard = readFileSync(new URL('dashboard.html', PASTA_FRONT), 'utf8');
+    assert.match(dashboard, /<script defer src="vendor\/chart\.umd\.min\.js"><\/script>/);
+  });
+
   test('nenhum recurso externo (CDN) em HTML, CSS ou JS do front', () => {
     const arquivos = [
       ...readdirSync(PASTA_FRONT).filter((f) => f.endsWith('.html')).map((f) => new URL(f, PASTA_FRONT)),
