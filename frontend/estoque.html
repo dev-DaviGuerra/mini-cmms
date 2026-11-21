@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Estoque · Mini-CMMS</title>
+  <link rel="icon" href="img/logo.svg" type="image/svg+xml">
+  <link rel="preload" href="fontes/ibm-plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fontes/ibm-plex-mono-600.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="css/estilo.css">
+  <script type="module" src="js/estoque.js"></script>
+</head>
+<body class="app">
+  <aside id="menu" class="menu-lateral" aria-label="Menu principal"></aside>
+
+  <main class="conteudo">
+    <header class="cabecalho-pagina">
+      <h1>Estoque de peças</h1>
+      <button id="botao-entrada" type="button" class="botao primario" hidden
+              aria-haspopup="dialog" aria-controls="drawer-entrada">+ Entrada de estoque</button>
+    </header>
+
+    <section class="indicadores indicadores-3" aria-label="Resumo do estoque">
+      <div class="indicador">
+        <span class="indicador-rotulo">Peças</span>
+        <span class="indicador-valor" id="resumo-total"><span class="skeleton valor"></span></span>
+        <span class="indicador-dica">itens cadastrados</span>
+      </div>
+      <div class="indicador parados" id="card-abaixo">
+        <span class="indicador-rotulo status critico">Abaixo do mínimo</span>
+        <span class="indicador-valor" id="resumo-abaixo"><span class="skeleton valor"></span></span>
+        <span class="indicador-dica">precisam de reposição</span>
+      </div>
+      <div class="indicador">
+        <span class="indicador-rotulo">Valor em estoque</span>
+        <span class="indicador-valor indicador-valor-moeda" id="resumo-valor"><span class="skeleton valor"></span></span>
+        <span class="indicador-dica">quantidade × custo unitário</span>
+      </div>
+    </section>
+
+    <div id="mensagem" role="status" hidden></div>
+
+    <!-- alertas pendentes (GET /api/alertas): só SUPERVISOR -->
+    <section id="secao-alertas" class="painel painel-alertas" aria-labelledby="titulo-alertas" hidden>
+      <div class="painel-cabecalho">
+        <h2 id="titulo-alertas" class="titulo-secao">Alertas de estoque mínimo pendentes</h2>
+      </div>
+      <ul id="lista-alertas" class="lista-alertas"></ul>
+    </section>
+
+    <section class="painel" aria-labelledby="titulo-lista">
+      <h2 id="titulo-lista" class="so-leitor-de-tela">Lista de peças</h2>
+      <div class="painel-cabecalho">
+        <form id="filtros" class="filtros" novalidate>
+          <div class="campo largo">
+            <label for="filtro-busca">Buscar</label>
+            <input id="filtro-busca" name="busca" type="search" placeholder="Código ou descrição" autocomplete="off">
+          </div>
+          <div class="campo campo-marcar">
+            <input id="filtro-abaixo" name="abaixo" type="checkbox">
+            <label for="filtro-abaixo">Só abaixo do mínimo</label>
+          </div>
+        </form>
+      </div>
+
+      <div class="tabela-rolagem">
+        <table class="tabela">
+          <thead>
+            <tr>
+              <th scope="col">Código</th>
+              <th scope="col">Descrição</th>
+              <th scope="col" class="numero">Estoque</th>
+              <th scope="col" class="numero">Mínimo</th>
+              <th scope="col">Situação</th>
+              <th scope="col" class="numero">Custo unit.</th>
+              <th scope="col" class="numero col-acao" id="cabecalho-acao" hidden>Ação</th>
+            </tr>
+          </thead>
+          <tbody id="linhas"></tbody>
+        </table>
+      </div>
+      <div class="rodape-tabela">
+        <span id="contagem" aria-live="polite"></span>
+      </div>
+    </section>
+  </main>
+
+  <!-- Drawer "Entrada de estoque": só SUPERVISOR (POST /api/pecas/:id/entrada -> CALL sp_entrada_estoque) -->
+  <aside id="drawer-entrada" class="drawer" role="dialog" aria-modal="true" aria-labelledby="titulo-entrada" inert>
+    <form id="form-entrada" class="drawer-form" novalidate>
+      <div class="drawer-cabecalho">
+        <h2 id="titulo-entrada">Entrada de estoque</h2>
+        <button type="button" class="botao secundario icone" data-fechar-drawer aria-label="Fechar painel">×</button>
+      </div>
+      <div class="drawer-corpo">
+        <div id="mensagem-entrada" role="alert" hidden></div>
+        <div class="campo">
+          <label for="entrada-peca">Peça</label>
+          <select id="entrada-peca" name="pecaId" required>
+            <option value="">Selecione a peça…</option>
+          </select>
+        </div>
+        <div id="entrada-situacao" class="situacao-peca" hidden></div>
+        <div class="campo campo-curto">
+          <label for="entrada-qtd">Quantidade recebida</label>
+          <input id="entrada-qtd" name="qtd" type="number" min="1" max="100000" step="1" inputmode="numeric" required>
+        </div>
+        <p class="ajuda">A entrada soma ao estoque, registra a movimentação e, se o estoque voltar ao mínimo, resolve os alertas da peça.</p>
+      </div>
+      <div class="drawer-rodape">
+        <button type="button" class="botao secundario" data-fechar-drawer>Cancelar</button>
+        <button type="submit" class="botao primario">Registrar entrada</button>
+      </div>
+    </form>
+  </aside>
+  <div id="fundo-drawer" class="fundo-drawer"></div>
+</body>
+</html>
