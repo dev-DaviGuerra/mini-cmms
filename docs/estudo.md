@@ -335,6 +335,38 @@ O Mini-CMMS é um sistema **interno** de uma fábrica, não um serviço público
 
 ---
 
+## Telas de Equipamentos e Estoque (issue #26)
+
+**O que foi feito**
+
+1. **Equipamentos** (`equipamentos.html`):
+   - resumo com total, operando e parados; o card de parados usa a cor crítica;
+   - lista com tag, nome, linha, criticidade e status em semáforo (ponto + texto);
+   - coluna de OS pendentes, com um link que abre a lista de OS já filtrada por aquele equipamento. A lista de OS passou a aceitar filtros pela URL.
+2. **Cadastro de equipamento** em drawer, só para SUPERVISOR:
+   - a linha de produção sugere as linhas existentes (`<datalist>`);
+   - a tag repetida dá 409, vindo da UNIQUE do banco;
+   - o equipamento novo nasce "Operando".
+3. **Estoque** (`estoque.html`):
+   - resumo com o total de peças, as abaixo do mínimo e o valor em estoque (quantidade × custo);
+   - lista com as peças **abaixo do mínimo destacadas e no topo**;
+   - busca e filtro "só abaixo do mínimo".
+4. **Para o SUPERVISOR:** painel de **alertas pendentes** (criados pela trigger `trg_estoque_minimo`) e **"Entrada de estoque" em drawer**. O drawer pode ser aberto pelo botão geral, pela linha da peça ou pelo próprio alerta, já com a peça escolhida. Ele mostra a situação ("faltam 2 para o mínimo") e chama `POST /api/pecas/:id/entrada`, que executa `CALL sp_entrada_estoque`. O aviso diz quantos alertas foram resolvidos. A tela de outros perfis nem chama `/api/alertas`, então não aparece nenhum 403 no console.
+5. O menu agora tem só o Dashboard como "em breve", e ele fica só com indicadores e gráficos. Teste de ponta a ponta: **29/29** no navegador, contra o `cmms_test`, cobrindo a entrada parcial (o alerta continua) e a entrada completa (o alerta é resolvido). O teste pegou um bug de usabilidade: o aviso flutuante cobria o botão "Entrada" da tabela. Agora o aviso não bloqueia cliques (`pointer-events: none`).
+
+**Perguntas prováveis**
+
+1. *Onde está a lógica de "estoque abaixo do mínimo": no banco ou no front?*
+   No banco. A API devolve `abaixo_minimo` calculado no SQL (`estoque < estoque_min`), e o alerta é criado pela trigger `trg_estoque_minimo` quando o estoque **cruza** o mínimo. O front só **mostra**: destaca a linha, ordena as críticas primeiro e conta quantas são. Assim a regra fica num lugar só e vale também para quem usa a API direto ou o psql. Uma peça com mínimo 0 e estoque 0 não está "abaixo", porque 0 < 0 é falso, e o teste confere isso.
+
+2. *Qual a diferença entre o destaque "abaixo do mínimo" e o "alerta pendente"?*
+   O destaque é o **estado atual**: a peça está abaixo do mínimo agora. O alerta é um **registro de evento**: em tal data o estoque cruzou o mínimo, e alguém precisa agir. O alerta fica pendente até uma entrada fazer o estoque voltar ao mínimo. Aí a procedure `sp_entrada_estoque` marca `resolvido = true`. No teste, uma entrada de 1 unidade (2 → 3, com mínimo 4) **mantém** o alerta; a seguinte (3 → 8) o **resolve**.
+
+3. *Por que filtrar e buscar no navegador, e não pela API?*
+   Porque são listas pequenas e de tamanho limitado: os equipamentos e as peças de uma fábrica, dezenas de itens. Carregar tudo uma vez e filtrar no navegador deixa a busca instantânea a cada tecla, sem uma requisição por letra digitada. A lista de **OS**, que cresce sem limite com o tempo, continua paginada na API (`limit`/`offset`). A escolha depende do volume.
+
+---
+
 ## Segurança (QSS)
 
 Registro das correções e dos controles de segurança, para o relatório do QSS.

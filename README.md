@@ -143,8 +143,10 @@ abra **http://localhost:3000**. No deploy, quem serve os arquivos é o NGINX.
 | Página | Conteúdo |
 |---|---|
 | `index.html` | login em tela dividida (o JWT fica no `sessionStorage`) |
-| `os.html` | indicadores do `/api/kpis/resumo`, lista de OS com filtros e paginação; "+ Nova OS" em painel lateral para OPERADOR e SUPERVISOR |
+| `os.html` | indicadores do `/api/kpis/resumo`, lista de OS com filtros e paginação (filtros também pela URL: `?status=&prioridade=&equipamentoId=`); "+ Nova OS" em painel lateral para OPERADOR e SUPERVISOR |
 | `os-detalhe.html?id=N` | detalhe da OS: dados, peças com custo e histórico de auditoria; "Assumir" (TECNICO, OS aberta) e "Fechar" em painel lateral com lista de peças (TECNICO que assumiu ou SUPERVISOR). Falta de estoque: mensagem com peça, pedido e disponível, e a OS vai para "Aguardando peça" |
+| `equipamentos.html` | resumo (total, operando, parados), lista com tag, nome, linha, criticidade, status em semáforo e OS pendentes (o link abre a lista de OS filtrada); busca e filtro; cadastro em painel lateral para SUPERVISOR |
+| `estoque.html` | resumo (peças, abaixo do mínimo, valor em estoque), lista com destaque das peças abaixo do mínimo (que aparecem primeiro); para SUPERVISOR: alertas pendentes e "Entrada de estoque" em painel lateral (`CALL sp_entrada_estoque`) |
 | `usuarios.html` | só SUPERVISOR (o item do menu aparece só para ele): lista de usuários, cadastro em painel lateral e ativar/desativar |
 | (todas as telas) | "Trocar senha" no rodapé do menu, em painel lateral, para qualquer perfil |
 | `404.html` | página para endereços inexistentes fora de `/api` (dentro de `/api` a resposta é JSON) |
