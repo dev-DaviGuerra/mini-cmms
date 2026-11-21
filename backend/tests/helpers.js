@@ -8,19 +8,32 @@ import { pool } from '../src/db.js';
 export const SENHA_TESTE = 'senha-de-teste-123';
 const sufixo = `${process.pid}-${Date.now()}`;
 
+// Cria um usuário por perfil, mais um segundo técnico (chave TECNICO2) para os testes
+// de "só o técnico que assumiu" e de concorrência.
 export async function criarUsuarios() {
   const hash = await bcrypt.hash(SENHA_TESTE, 4); // custo baixo só para o teste ser rápido
   const usuarios = {};
-  for (const perfil of ['OPERADOR', 'TECNICO', 'SUPERVISOR']) {
-    const email = `teste-${perfil.toLowerCase()}-${sufixo}@cmms.local`;
+  const lista = [['OPERADOR', 'OPERADOR'], ['TECNICO', 'TECNICO'], ['TECNICO2', 'TECNICO'], ['SUPERVISOR', 'SUPERVISOR']];
+  for (const [chave, perfil] of lista) {
+    const email = `teste-${chave.toLowerCase()}-${sufixo}@cmms.local`;
     const { rows } = await pool.query(
       `INSERT INTO usuarios (nome, email, senha_hash, perfil)
        VALUES ($1, $2, $3, $4) RETURNING id, email, perfil`,
-      [`Teste ${perfil}`, email, hash, perfil],
+      [`Teste ${chave}`, email, hash, perfil],
     );
-    usuarios[perfil] = rows[0];
+    usuarios[chave] = rows[0];
   }
   return usuarios;
+}
+
+// Abre uma OS direto pela API (como operador) e devolve o corpo da resposta
+export async function abrirOs(app, request, token, equipamentoId, extra = {}) {
+  const res = await request(app)
+    .post('/api/os')
+    .set('Authorization', `Bearer ${token}`)
+    .send({ equipamentoId, descricao: 'OS criada pelo teste', ...extra });
+  if (res.status !== 201) throw new Error(`abrir OS de teste falhou: ${res.status}`);
+  return res.body;
 }
 
 let contadorEquipamentos = 0;
