@@ -25,6 +25,16 @@ if (!DATABASE_URL || !SEED_PASSWORD) {
   process.exit(1);
 }
 
+// Banco remoto (ex.: Neon) => SSL com verificação de certificado; local => sem SSL.
+// Mesma regra de backend/src/db.js (sslmode/channel_binding são parâmetros do psql).
+function configConexao(url) {
+  const u = new URL(url);
+  u.searchParams.delete('sslmode');
+  u.searchParams.delete('channel_binding');
+  const local = ['localhost', '127.0.0.1', '::1'].includes(u.hostname.replace(/^\[|\]$/g, ''));
+  return { connectionString: u.toString(), ssl: local ? false : { rejectUnauthorized: true } };
+}
+
 // ---------------------------------------------------------------------
 // Gerador pseudoaleatório com semente (mulberry32)
 // ---------------------------------------------------------------------
@@ -261,7 +271,7 @@ function gerarOrdens(agora, equipamentos, idsOperadores, idsTecnicos, pecasPorCo
 // Execução
 // ---------------------------------------------------------------------
 async function main() {
-  const client = new pg.Client({ connectionString: DATABASE_URL });
+  const client = new pg.Client(configConexao(DATABASE_URL));
   await client.connect();
 
   try {
