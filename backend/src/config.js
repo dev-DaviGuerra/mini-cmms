@@ -20,8 +20,17 @@ if (jwtSecret.length < 32) {
   throw new Error('JWT_SECRET deve ter pelo menos 32 caracteres.');
 }
 
+// Em teste (NODE_ENV=test, definido pelo "npm test") a API usa SEMPRE o banco de teste,
+// porque os testes inserem e apagam dados.
+const emTeste = process.env.NODE_ENV === 'test';
+const databaseUrl = emTeste ? obrigatoria('DATABASE_URL_TEST') : obrigatoria('DATABASE_URL');
+if (emTeste && databaseUrl === process.env.DATABASE_URL) {
+  throw new Error('DATABASE_URL_TEST não pode ser igual a DATABASE_URL (banco de desenvolvimento).');
+}
+
 export const config = Object.freeze({
-  databaseUrl: obrigatoria('DATABASE_URL'),
+  emTeste,
+  databaseUrl,
   jwtSecret,
   jwtExpiresIn: '8h',
   port: Number(process.env.PORT) || 3000,

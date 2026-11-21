@@ -1,4 +1,5 @@
-// Utilitários dos testes. Os testes usam o banco de DATABASE_URL (backend/.env), que precisa
+// Utilitários dos testes. "npm test" define NODE_ENV=test, e o config.js passa a usar
+// DATABASE_URL_TEST (banco cmms_test), nunca o de desenvolvimento. Esse banco precisa
 // ter os scripts database/01..03 aplicados. Cada arquivo cria seus próprios dados com o
 // prefixo "teste-" e os remove no final, sem depender do seed.
 import bcrypt from 'bcrypt';
