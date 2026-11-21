@@ -1,0 +1,19 @@
+# Segredos: NUNCA versionar
+.env
+.env.*
+!.env.example
+
+# Dependências e artefatos
+node_modules/
+npm-debug.log*
+coverage/
+.scannerwork/
+
+# SO / editores
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Documento do enunciado (fica fora do repositório público)
+Mini-CMMS_Projeto_AVD2.pdf
