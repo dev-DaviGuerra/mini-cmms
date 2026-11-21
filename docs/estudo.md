@@ -217,3 +217,47 @@ Por isso os KPIs ficaram em FUNCTION (precisam devolver uma tabela consultável 
 
 3. *Por que as datas padrão são calculadas no banco e não no Node?*
    Porque "hoje" depende do fuso horário. O servidor Node e o banco podem estar em fusos diferentes (a VM da Azure normalmente usa UTC, e o Brasil está em UTC−3). Perto da meia-noite, os dois discordariam do dia. Usando `CURRENT_DATE` do PostgreSQL, a data padrão é coerente com os `TIMESTAMPTZ` que a função compara. Pelo mesmo motivo, as datas voltam como texto `AAAA-MM-DD`, e não como objeto `Date` do JavaScript, que aplicaria o fuso local.
+
+---
+
+## Segurança (QSS)
+
+Registro das correções de segurança apontadas pelo SonarCloud, para o relatório do QSS.
+
+### S1 — ReDoS na leitura das consultas BD2 (PR #22, regra Sonar S5852, severidade crítica)
+
+**O que é ReDoS.** *Regular expression Denial of Service* é uma negação de serviço causada por uma expressão regular. Os motores de regex do JavaScript (e da maioria das linguagens) testam as alternativas com *backtracking*: quando uma tentativa falha, voltam e tentam outra divisão do texto. Se a regex tem **quantificadores aninhados** que podem casar o mesmo trecho de mais de uma forma, como `(a*)*` ou `(x\s*)*` com `\s*` dos dois lados, o número de divisões possíveis cresce **exponencialmente** com o tamanho do texto. Uma entrada pequena e maliciosa, que quase casa mas falha no fim, pode travar o processo por segundos ou minutos. Como o Node.js roda o JavaScript numa única thread, enquanto a regex roda **nenhuma outra requisição é atendida**: a API inteira para.
+
+**Por que o Sonar apontou.** Em `backend/src/consultasBd2.js`, a remoção do `;` final usava `/;\s*(--[^\n]*\s*)*$/`. O grupo `(--[^\n]*\s*)*` é repetido por `*`, e dentro dele `[^\n]*` e `\s*` podem dividir os espaços entre si de várias formas. Quando o `$` final não casa, o motor experimenta todas as combinações. Medição feita com entradas do tipo `;` + `--` repetido n vezes + `x`:
+
+| n | Tamanho da entrada | Tempo da regex antiga |
+|---|---|---|
+| 14 | 37 caracteres | 63 ms |
+| 16 | 41 caracteres | 251 ms |
+| 18 | 45 caracteres | 1.055 ms |
+| 20 | 49 caracteres | **10.583 ms** |
+
+Cada 4 caracteres a mais multiplicam o tempo por 4 a 10. A regex que validava o início (`^\s*(--[^\n]*\n\s*)*(SELECT|WITH)`) tinha o mesmo padrão aninhado e também foi removida. O Quality Gate do PR reprovou com `new_security_rating = E` (o limite é A).
+
+**Risco real neste caso.** Baixo: o texto analisado é um arquivo do próprio repositório, lido uma vez quando a API sobe, e não vem do usuário. Mesmo assim, a correção é obrigatória. O código poderia ser reaproveitado com entrada externa, e o padrão é uma vulnerabilidade conhecida (CWE-1333).
+
+**Como foi corrigido.** O parser foi reescrito para processar o arquivo **linha a linha**, só com operações simples de string, **sem nenhuma expressão regular**:
+- `split('\n')` separa as linhas, e `endsWith('\r')` trata as quebras de linha do Windows;
+- `startsWith('-- @consulta ')` identifica o marcador de cada consulta;
+- linhas que começam com `\` (como `\echo`) são ignoradas;
+- a consulta termina na primeira linha cujo `trimEnd()` termina em `;`, e o `;` é retirado com `slice`;
+- depois do `;` só podem vir comentários ou linhas vazias; caso contrário, o arquivo é recusado por ter "mais de um comando";
+- a primeira linha útil precisa começar com `SELECT` ou `WITH`, e o nome da consulta só aceita `a-z`, `0-9` e `-`.
+
+Cada linha é examinada uma vez, então o tempo é **linear**: a mesma entrada patológica, com 100.000 caracteres, é processada em **0,4 ms**. As 3 consultas geradas são **idênticas, byte a byte**, às da versão anterior, e a API devolve os mesmos resultados. Há um teste de desempenho que falha se o parser levar mais de 200 ms com essa entrada, além de testes de CRLF, comentários depois do `;`, dois comandos, ausência de `;`, nome inválido e consulta duplicada.
+
+**Perguntas prováveis**
+
+1. *Se o arquivo SQL não vem do usuário, por que corrigir?*
+   Porque a vulnerabilidade está no **código**, não só no uso atual. Amanhã alguém pode reaproveitar a função com um texto vindo de uma requisição. Além disso, o Quality Gate trata qualquer vulnerabilidade nova como bloqueante, e o QSS avalia justamente esse processo: detectar, corrigir e comprovar com o relatório de antes e depois.
+
+2. *Toda regex é perigosa?*
+   Não. O perigo está em quantificadores **aninhados** ou **alternativas sobrepostas**, que deixam o mesmo trecho ser casado de várias formas, como `(a+)+`, `(a|a)*` ou `(\s*x)*`. Regex simples, sem repetição dentro de repetição, como `^\d{4}-\d{2}-\d{2}$` (usada na validação de datas), rodam em tempo linear. Quando a regra é simples, operações de string também são mais legíveis.
+
+3. *Por que o ReDoS é tão grave no Node.js em particular?*
+   Porque o Node executa o JavaScript num único *event loop*. Uma regex presa em backtracking ocupa essa thread, e todas as outras requisições, inclusive as de outros usuários, ficam esperando. Com 50 caracteres, um atacante segura a API por 10 segundos. Repetindo a chamada, deixa o sistema indisponível.
