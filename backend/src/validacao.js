@@ -84,6 +84,26 @@ export function criarValidador() {
       return valor.trim();
     },
 
+    // Data opcional no formato AAAA-MM-DD (e que exista no calendário). Ausente => undefined.
+    data(valor, campo) {
+      if (valor === undefined || valor === null || valor === '') return undefined;
+      // mês 13 gera Date inválida (getTime NaN); 30/02 "transborda" para março e a volta
+      // para texto não bate com o original
+      const d = typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(valor)
+        ? new Date(`${valor}T00:00:00Z`) : null;
+      const valida = d !== null && !Number.isNaN(d.getTime()) && d.toISOString().startsWith(valor);
+      if (!valida) {
+        problemas.push(`${campo} deve ser uma data válida no formato AAAA-MM-DD`);
+        return undefined;
+      }
+      return valor;
+    },
+
+    // Problema que não cabe nos validadores acima (ex.: regra entre dois campos)
+    erro(mensagem) {
+      problemas.push(mensagem);
+    },
+
     // Lança 400 com todos os problemas encontrados de uma vez
     verificar(mensagem = 'Dados inválidos') {
       if (problemas.length) throw new ErroValidacao(mensagem, problemas);
