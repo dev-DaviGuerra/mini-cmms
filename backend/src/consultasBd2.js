@@ -4,32 +4,76 @@
 // Formato esperado no arquivo:
 //   -- @consulta <nome>
 //   \echo '...'          <- comando do psql, ignorado aqui
-//   SELECT ... ;         <- a consulta (uma por marcador)
+//   SELECT ... ;         <- a consulta (uma por marcador), termina na linha com ;
+//
+// O texto é processado LINHA A LINHA, só com operações simples de string (split, trim,
+// startsWith, endsWith). Não há expressões regulares: assim não existe risco de ReDoS
+// (backtracking catastrófico), apontado pelo SonarCloud (regra S5852) numa versão anterior.
 import { readFileSync } from 'node:fs';
 
 const ARQUIVO = new URL('../../database/04_consultas_bd2.sql', import.meta.url);
-const MARCADOR = /^-- @consulta ([a-z0-9-]+)[ \t]*$/m;
+const PREFIXO_MARCADOR = '-- @consulta ';
+const CARACTERES_NOME = 'abcdefghijklmnopqrstuvwxyz0123456789-';
+
+function nomeValido(nome) {
+  return nome.length > 0 && [...nome].every((c) => CARACTERES_NOME.includes(c));
+}
+
+function ehComentarioOuVazia(linha) {
+  const t = linha.trim();
+  return t === '' || t.startsWith('--');
+}
+
+// Recebe as linhas de UMA consulta (já sem o marcador e sem os comandos do psql) e devolve
+// o SQL até o ; final, sem o ;. Valida que é um único SELECT/WITH.
+function montarConsulta(nome, linhas) {
+  const fim = linhas.findIndex((l) => l.trimEnd().endsWith(';'));
+  if (fim < 0) throw new Error(`Consulta "${nome}" em 04_consultas_bd2.sql não termina com ;`);
+
+  // depois do ; só podem vir comentários ou linhas vazias (ex.: o cabeçalho da próxima consulta)
+  if (!linhas.slice(fim + 1).every(ehComentarioOuVazia)) {
+    throw new Error(`Consulta "${nome}" em 04_consultas_bd2.sql tem mais de um comando`);
+  }
+
+  const corpo = linhas.slice(0, fim + 1);
+  const ultima = corpo[fim].trimEnd();
+  corpo[fim] = ultima.slice(0, -1); // remove o ;
+  const sql = corpo.join('\n').trim();
+
+  const primeira = (corpo.find((l) => !ehComentarioOuVazia(l)) ?? '').trim().toUpperCase();
+  const comecaCom = (palavra) => primeira === palavra
+    || primeira.startsWith(`${palavra} `) || primeira.startsWith(`${palavra}(`);
+  if (!comecaCom('SELECT') && !comecaCom('WITH')) {
+    throw new Error(`Consulta "${nome}" em 04_consultas_bd2.sql não é um SELECT/WITH`);
+  }
+  return sql;
+}
 
 // Separa o texto em { nome: sql }. Exportada para poder ser testada isoladamente.
 export function separarConsultas(texto) {
-  const partes = texto.split(MARCADOR); // [antes, nome1, corpo1, nome2, corpo2, ...]
   const consultas = {};
+  let atual = null; // { nome, linhas }
 
-  for (let i = 1; i < partes.length; i += 2) {
-    const nome = partes[i];
-    const sql = partes[i + 1]
-      .split(/\r?\n/)
-      .filter((linha) => !linha.trimStart().startsWith('\\')) // remove \echo e outros comandos do psql
-      .join('\n')
-      .trim()
-      .replace(/;\s*(--[^\n]*\s*)*$/, '');                    // tira o ; final (e comentários depois dele)
+  const concluir = () => {
+    if (atual) consultas[atual.nome] = montarConsulta(atual.nome, atual.linhas);
+  };
 
-    if (!/^\s*(--[^\n]*\n\s*)*(SELECT|WITH)\b/i.test(sql)) {
-      throw new Error(`Consulta "${nome}" em 04_consultas_bd2.sql não é um SELECT/WITH`);
+  for (const bruta of texto.split('\n')) {
+    const linha = bruta.endsWith('\r') ? bruta.slice(0, -1) : bruta; // aceita CRLF (Windows)
+    const t = linha.trim();
+
+    if (t.startsWith(PREFIXO_MARCADOR)) {
+      concluir();
+      const nome = t.slice(PREFIXO_MARCADOR.length).trim();
+      if (!nomeValido(nome)) throw new Error(`Nome de consulta inválido em 04_consultas_bd2.sql: "${nome}"`);
+      if (consultas[nome]) throw new Error(`Consulta "${nome}" duplicada em 04_consultas_bd2.sql`);
+      atual = { nome, linhas: [] };
+    } else if (atual && !t.startsWith('\\')) {
+      // linhas que começam com \ são comandos do psql (\echo etc.): ignoradas
+      atual.linhas.push(linha);
     }
-    if (consultas[nome]) throw new Error(`Consulta "${nome}" duplicada em 04_consultas_bd2.sql`);
-    consultas[nome] = sql;
   }
+  concluir();
   return consultas;
 }
 
