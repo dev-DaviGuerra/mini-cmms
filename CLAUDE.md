@@ -113,8 +113,13 @@ deploy, SonarCloud, artigo, slides.
   correspondente em `ITENS_MENU` (`ui.js`), dando um `href`.
 - Estados obrigatórios: carregando (`linhasSkeleton()` + `aria-busy`), vazio (`estadoVazio()`)
   e foco visível pelo teclado (`:focus-visible` já está no CSS).
-- Formulários secundários em drawer (`.drawer` + `inert` quando fechado, Esc fecha e o foco volta
-  ao botão).
+- Formulários secundários em drawer: HTML `.drawer` com `inert` + `.fundo-drawer`, e a lógica
+  vem de `criarDrawer()` de `ui.js` (Esc fecha, Tab preso, foco volta ao botão). Não reimplementar.
+- Fluxos que gravam dados (assumir, fechar, cadastrar) são testados no navegador contra uma
+  **segunda instância da API** com `NODE_ENV=test PORT=3001`, que usa o `cmms_test`. Um script de
+  fixtures no scratchpad cria usuários, equipamento, peças e OS e os apaga no final. Nunca gravar
+  dados de teste no `cmms` de desenvolvimento. Parar a instância 3001 antes de rodar `npm test`,
+  porque os dois usam o mesmo banco.
 - Rotas inexistentes fora de `/api` mostram `404.html` (caminhos absolutos nela).
 
 ## Comandos

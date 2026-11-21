@@ -2,7 +2,7 @@
 import { api, exigirLogin, ErroApi } from './api.js';
 import {
   el, limpar, marcaStatus, marcaPrioridade, formatarDataHoraCurta, preencherSelect, classeDe,
-  mostrarMensagem, esconderMensagem, montarLayout, linhasSkeleton, estadoVazio,
+  mostrarMensagem, esconderMensagem, montarLayout, linhasSkeleton, estadoVazio, criarDrawer,
   ROTULOS_STATUS, ROTULOS_PRIORIDADE, ROTULOS_TIPO,
 } from './ui.js';
 
@@ -36,6 +36,7 @@ async function carregarIndicadores() {
     $('kpi-andamento').textContent = r.os_em_andamento;
     $('kpi-aguardando').textContent = r.os_aguardando_peca;
     $('kpi-parados').textContent = r.equipamentos_parados;
+    $('card-parados').classList.toggle('ativo', r.equipamentos_parados > 0);
   } catch {
     for (const id of ['kpi-abertas', 'kpi-andamento', 'kpi-aguardando', 'kpi-parados']) $(id).textContent = '—';
   }
@@ -149,38 +150,20 @@ const caixaNova = $('mensagem-nova');
 const botaoNova = $('botao-nova');
 botaoNova.hidden = !['OPERADOR', 'SUPERVISOR'].includes(usuario.perfil);
 
-function abrirDrawer() {
+const drawerNova = criarDrawer({
+  drawer,
+  fundo,
+  botaoOrigem: botaoNova,
+  primeiroCampo: $('nova-equipamento'),
+  aoFechar: () => {
+    formNova.reset();
+    $('nova-prioridade').value = 'MEDIA';
+  },
+});
+
+botaoNova.addEventListener('click', () => {
   esconderMensagem(caixaNova);
-  drawer.inert = false;
-  drawer.classList.add('aberto');
-  fundo.classList.add('visivel');
-  document.body.classList.add('drawer-aberto');
-  $('nova-equipamento').focus();
-}
-
-function fecharDrawer() {
-  drawer.classList.remove('aberto');
-  fundo.classList.remove('visivel');
-  document.body.classList.remove('drawer-aberto');
-  drawer.inert = true; // fora do foco do teclado enquanto fechado
-  formNova.reset();
-  $('nova-prioridade').value = 'MEDIA';
-  botaoNova.focus();
-}
-
-botaoNova.addEventListener('click', abrirDrawer);
-for (const alvo of document.querySelectorAll('[data-fechar-drawer]')) alvo.addEventListener('click', fecharDrawer);
-document.addEventListener('keydown', (evento) => {
-  if (!drawer.classList.contains('aberto')) return;
-  if (evento.key === 'Escape') fecharDrawer();
-  // mantém o Tab dentro do drawer (modal)
-  if (evento.key === 'Tab') {
-    const focaveis = [...drawer.querySelectorAll('button, select, textarea, input')].filter((e) => !e.disabled);
-    const primeiro = focaveis[0];
-    const ultimo = focaveis.at(-1);
-    if (evento.shiftKey && document.activeElement === primeiro) { evento.preventDefault(); ultimo.focus(); }
-    else if (!evento.shiftKey && document.activeElement === ultimo) { evento.preventDefault(); primeiro.focus(); }
-  }
+  drawerNova.abrir();
 });
 
 formNova.addEventListener('submit', async (evento) => {
@@ -207,7 +190,7 @@ formNova.addEventListener('submit', async (evento) => {
   botao.disabled = true;
   try {
     const os = await api.post('/os', dados);
-    fecharDrawer();
+    drawerNova.fechar();
     mostrarMensagem(caixa, `OS #${os.id} aberta para ${os.equipamento_tag}. O equipamento agora está PARADO.`, 'sucesso');
     await Promise.all([carregarEquipamentos(), carregarIndicadores(), recarregarDoInicio()]);
   } catch (erro) {

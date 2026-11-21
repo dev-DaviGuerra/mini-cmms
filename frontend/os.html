@@ -15,10 +15,7 @@
 
   <main class="conteudo" id="conteudo">
     <header class="cabecalho-pagina">
-      <div>
-        <span class="sobretitulo">Operação</span>
-        <h1>Ordens de serviço</h1>
-      </div>
+      <h1>Ordens de serviço</h1>
       <button id="botao-nova" type="button" class="botao primario" hidden
               aria-haspopup="dialog" aria-controls="drawer-nova">+ Nova OS</button>
     </header>
@@ -40,8 +37,9 @@
         <span class="indicador-valor" id="kpi-aguardando"><span class="skeleton valor"></span></span>
         <span class="indicador-dica">sem estoque no fechamento</span>
       </button>
-      <div class="indicador parados">
-        <span class="indicador-rotulo">Máquinas paradas</span>
+      <!-- indicador mais crítico: cor de alerta própria e destaque quando > 0 -->
+      <div class="indicador parados" id="card-parados">
+        <span class="indicador-rotulo status critico">Máquinas paradas</span>
         <span class="indicador-valor" id="kpi-parados"><span class="skeleton valor"></span></span>
         <span class="indicador-dica">equipamentos com OS pendente</span>
       </div>

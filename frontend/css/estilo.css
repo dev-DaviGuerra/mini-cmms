@@ -75,6 +75,8 @@
   --status-aguardando-peca: #e8590c;
   --status-fechada: #2e7d4f;
   --status-cancelada: #8a939d;
+  --critico: #a4161a;          /* máquina parada: o alerta mais grave do painel */
+  --critico-suave: #fbe9e9;
 
   /* prioridade (barra lateral da linha) */
   --prioridade-emergencia: #c62828;
@@ -231,15 +233,6 @@ a.menu-item:hover { background: var(--grafite-800); color: var(--branco); }
   gap: var(--esp-4);
   margin-bottom: var(--esp-5);
 }
-.cabecalho-pagina .sobretitulo {
-  display: block;
-  font-size: var(--texto-xs);
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--texto-suave);
-  margin-bottom: var(--esp-1);
-}
 
 /* ---------- superfícies ---------- */
 .painel {
@@ -357,7 +350,15 @@ button.indicador:hover { background: var(--cinza-50); }
 .indicador.aberta { --cor-indicador: var(--status-aberta); }
 .indicador.em-andamento { --cor-indicador: var(--status-em-andamento); }
 .indicador.aguardando-peca { --cor-indicador: var(--status-aguardando-peca); }
-.indicador.parados { --cor-indicador: var(--grafite-900); }
+.indicador.parados { --cor-indicador: var(--critico); }
+/* com pelo menos uma máquina parada: fundo de alerta, número na cor crítica e ponto pulsando */
+.indicador.parados.ativo { background: var(--critico-suave); border-color: var(--critico); }
+.indicador.parados.ativo .indicador-valor { color: var(--critico); }
+.indicador.parados.ativo .status::before { animation: pulso 1.6s ease-in-out infinite; }
+@keyframes pulso {
+  0%, 100% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--critico) 18%, transparent); }
+  50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--critico) 30%, transparent); }
+}
 
 /* =====================================================================
    Status (semáforo: ponto colorido + texto) e prioridade
@@ -384,6 +385,7 @@ button.indicador:hover { background: var(--cinza-50); }
 .status.aguardando-peca { --cor-status: var(--status-aguardando-peca); }
 .status.fechada { --cor-status: var(--status-fechada); }
 .status.cancelada { --cor-status: var(--status-cancelada); }
+.status.critico { --cor-status: var(--critico); }
 .indicador-rotulo.status::before { width: 8px; height: 8px; }
 
 .prioridade { font-size: var(--texto-sm); font-weight: 500; color: var(--grafite-700); white-space: nowrap; }
@@ -480,6 +482,7 @@ button.indicador:hover { background: var(--cinza-50); }
 @keyframes brilho { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 @media (prefers-reduced-motion: reduce) {
   .skeleton { animation: none; }
+  .indicador.parados.ativo .status::before { animation: none; }
   * { transition: none !important; }
 }
 
@@ -553,6 +556,112 @@ button.indicador:hover { background: var(--cinza-50); }
 .drawer-form { display: flex; flex-direction: column; height: 100%; }
 .linha-campos { display: grid; grid-template-columns: 1fr 1fr; gap: var(--esp-3); }
 body.drawer-aberto { overflow: hidden; }
+
+/* =====================================================================
+   Detalhe da OS
+   ===================================================================== */
+.trilha {
+  display: flex;
+  align-items: center;
+  gap: var(--esp-2);
+  margin-bottom: var(--esp-3);
+  font-size: var(--texto-sm);
+  color: var(--texto-suave);
+}
+.trilha a { color: var(--texto-suave); }
+.trilha a:hover { color: var(--texto); }
+.trilha [aria-current] { color: var(--texto); font-weight: 600; font-family: var(--fonte-mono); }
+
+.cabecalho-os { align-items: flex-start; }
+.cabecalho-os h1 { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--esp-3); }
+.titulo-equip { font-size: var(--texto-lg); font-weight: 500; color: var(--grafite-700); }
+.linha-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--esp-2);
+  margin-top: var(--esp-2);
+  font-size: var(--texto-sm);
+  color: var(--grafite-700);
+}
+.linha-meta .separador { color: var(--grafite-300); }
+.acoes-os { display: flex; align-items: center; gap: var(--esp-3); flex-wrap: wrap; justify-content: flex-end; }
+.dica-acao { max-width: 320px; font-size: var(--texto-sm); color: var(--texto-suave); text-align: right; }
+
+.grade-detalhe {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+  gap: var(--esp-4);
+  align-items: start;
+}
+.coluna-principal, .coluna-lateral { display: flex; flex-direction: column; gap: var(--esp-4); }
+.secao { padding: var(--esp-4) var(--esp-5) var(--esp-5); }
+.secao h2 {
+  margin-bottom: var(--esp-3);
+  font-size: var(--texto-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--texto-suave);
+}
+.texto-descricao { margin: 0 0 var(--esp-4); font-size: var(--texto-lg); white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* lista de dados: cada <div> tem o rótulo (dt) em cima e o valor (dd) embaixo */
+.dados {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--esp-4);
+  margin: 0;
+  padding-top: var(--esp-4);
+  border-top: 1px solid var(--cinza-100);
+}
+#os-fechamento { padding-top: 0; border-top: 0; }
+.dados > div { min-width: 0; }
+.dados > .largo { grid-column: 1 / -1; }
+.dados dt { font-size: var(--texto-xs); font-weight: 600; color: var(--texto-suave); text-transform: uppercase; letter-spacing: 0.04em; }
+.dados dd { margin: var(--esp-1) 0 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+
+.tabela-simples td, .tabela-simples th { padding: var(--esp-2) var(--esp-3); }
+.tabela-simples tbody tr > td:first-child { box-shadow: none; }
+.tabela-simples tbody tr:hover { background: transparent; }
+.tabela .numero { text-align: right; white-space: nowrap; }
+.tabela tfoot td { padding: var(--esp-2) var(--esp-3); font-weight: 600; border-top: 2px solid var(--borda); }
+
+/* histórico (linha do tempo) */
+.linha-tempo { list-style: none; margin: 0; padding: 0 0 0 var(--esp-2); }
+.linha-tempo li {
+  position: relative;
+  display: grid;
+  gap: 2px;
+  padding: 0 0 var(--esp-4) var(--esp-4);
+  border-left: 2px solid var(--cinza-200);
+}
+.linha-tempo li:last-child { border-left-color: transparent; padding-bottom: 0; }
+.linha-tempo li .status { margin-left: calc(-1 * var(--esp-4) - 6px); background: var(--superficie); padding-right: var(--esp-1); }
+.linha-tempo .quem { font-size: var(--texto-sm); color: var(--grafite-700); }
+.linha-tempo .quando { font-size: var(--texto-xs); color: var(--texto-suave); }
+.linha-tempo .sem-registro .quem { font-style: italic; color: var(--texto-suave); }
+
+/* drawer de fechamento */
+.drawer-largo { --largura-drawer: 520px; }
+.campo-curto { max-width: 180px; }
+.grupo-pecas { margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: var(--esp-2); }
+.grupo-pecas legend { padding: 0; font-size: var(--texto-sm); font-weight: 600; color: var(--grafite-700); }
+.grupo-pecas .ajuda { margin: 0; font-size: var(--texto-xs); color: var(--texto-suave); }
+.grupo-pecas > .botao { align-self: flex-start; }
+.lista-pecas { display: flex; flex-direction: column; gap: var(--esp-2); }
+.linha-peca {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 84px 36px;
+  gap: var(--esp-2);
+  align-items: center;
+  padding: var(--esp-2);
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  background: var(--cinza-50);
+}
+.linha-peca.invalida { border-color: var(--perigo); background: var(--perigo-suave); box-shadow: inset 4px 0 0 var(--perigo); }
+.campo [aria-invalid="true"] { border-color: var(--perigo); }
 
 /* =====================================================================
    Login (tela dividida)
@@ -660,6 +769,10 @@ body.drawer-aberto { overflow: hidden; }
 @media (max-width: 1180px) {
   .descricao-curta { max-width: 180px; }
   .conteudo { padding: var(--esp-5); }
+}
+@media (max-width: 1100px) {
+  .grade-detalhe { grid-template-columns: 1fr; }
+  .dados { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 960px) {
   :root { --largura-menu: 200px; }
