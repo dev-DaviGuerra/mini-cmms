@@ -194,3 +194,70 @@ Por isso os KPIs ficaram em FUNCTION (precisam devolver uma tabela consultável 
 
 3. *A rota de entrada chama uma PROCEDURE: como a API sabe o que aconteceu, se ela não devolve linhas?*
    A procedure faz o trabalho (UPDATE, INSERT, resolver alertas), e a API consulta o resultado **na mesma transação**: conta os alertas pendentes antes e depois do `CALL`, e lê a peça atualizada no fim. É a divisão típica: a procedure executa a ação, e as consultas (ou funções) leem o estado. Como a procedure não faz COMMIT própria, tudo é confirmado de uma vez pelo `transacao()`.
+
+---
+
+## Etapa 7 — KPIs e consultas BD2 na API (issue #7)
+
+**O que foi feito**
+
+1. `GET /api/kpis?inicio=&fim=` chama a função `sp_kpis_equipamento`. Sem datas, usa os últimos 90 dias até hoje, calculados **no banco** (`CURRENT_DATE`). As datas são validadas (formato e calendário; `inicio <= fim`), e os `NUMERIC` viram números no JSON.
+2. `GET /api/kpis/resumo` devolve numa consulta só os totais dos cards do dashboard: OS abertas, em andamento e aguardando peça, equipamentos parados e alertas pendentes.
+3. As 3 consultas BD2 viraram rotas (`mttr-acima-media`, `top-pecas`, `pareto-causas`) **sem copiar o SQL**. A API lê o `database/04_consultas_bd2.sql` ao subir, separa as consultas pelos marcadores `-- @consulta <nome>` e ignora os comandos `\echo` do psql. Conferi que o psql e a API devolvem os mesmos números.
+4. Todas as rotas aceitam qualquer usuário logado (401 sem token).
+5. São 9 testes novos, com um cenário pequeno montado à mão (MTTR 3h e 1h, custo, OS pendentes, saídas dentro e fora dos 30 dias), cujos resultados foram calculados no papel. O teste de datas pegou um bug real: um mês inválido gerava erro 500 em vez de 400.
+
+**Perguntas prováveis**
+
+1. *Por que a API lê o arquivo `.sql` em vez de ter as consultas no código JavaScript?*
+   Para ter **uma única fonte da verdade**. Se o SQL estivesse copiado no JavaScript, uma correção feita no arquivo da disciplina de BD2 poderia não chegar à API, e o professor veria no dashboard um resultado diferente do que roda no psql. Lendo o arquivo, os dois sempre executam o mesmo texto. O parser recusa trechos que não sejam `SELECT`/`WITH`, então ninguém consegue, por engano, transformar uma rota de leitura num `DELETE`.
+
+2. *Como você sabe que os números de MTTR, MTBF e disponibilidade estão certos?*
+   O teste monta um cenário que dá para calcular à mão. O equipamento E1 tem duas falhas, com reparos de 2h e 4h: MTTR = 6 ÷ 2 = 3h. O período de 90 dias, inclusivo, tem 91 dias = 2184h; o tempo operando é 2184 − 6 = 2178h, então MTBF = 2178 ÷ 2 = 1089h e disponibilidade = 1089 ÷ (1089 + 3) = 99,73%. O custo é 6h × R$ 80 + 2 peças × R$ 10 = R$ 500. A API precisa devolver exatamente esses valores.
+
+3. *Por que as datas padrão são calculadas no banco e não no Node?*
+   Porque "hoje" depende do fuso horário. O servidor Node e o banco podem estar em fusos diferentes (a VM da Azure normalmente usa UTC, e o Brasil está em UTC−3). Perto da meia-noite, os dois discordariam do dia. Usando `CURRENT_DATE` do PostgreSQL, a data padrão é coerente com os `TIMESTAMPTZ` que a função compara. Pelo mesmo motivo, as datas voltam como texto `AAAA-MM-DD`, e não como objeto `Date` do JavaScript, que aplicaria o fuso local.
+
+---
+
+## Segurança (QSS)
+
+Registro das correções de segurança apontadas pelo SonarCloud, para o relatório do QSS.
+
+### S1 — ReDoS na leitura das consultas BD2 (PR #22, regra Sonar S5852, severidade crítica)
+
+**O que é ReDoS.** *Regular expression Denial of Service* é uma negação de serviço causada por uma expressão regular. Os motores de regex do JavaScript (e da maioria das linguagens) testam as alternativas com *backtracking*: quando uma tentativa falha, voltam e tentam outra divisão do texto. Se a regex tem **quantificadores aninhados** que podem casar o mesmo trecho de mais de uma forma, como `(a*)*` ou `(x\s*)*` com `\s*` dos dois lados, o número de divisões possíveis cresce **exponencialmente** com o tamanho do texto. Uma entrada pequena e maliciosa, que quase casa mas falha no fim, pode travar o processo por segundos ou minutos. Como o Node.js roda o JavaScript numa única thread, enquanto a regex roda **nenhuma outra requisição é atendida**: a API inteira para.
+
+**Por que o Sonar apontou.** Em `backend/src/consultasBd2.js`, a remoção do `;` final usava `/;\s*(--[^\n]*\s*)*$/`. O grupo `(--[^\n]*\s*)*` é repetido por `*`, e dentro dele `[^\n]*` e `\s*` podem dividir os espaços entre si de várias formas. Quando o `$` final não casa, o motor experimenta todas as combinações. Medição feita com entradas do tipo `;` + `--` repetido n vezes + `x`:
+
+| n | Tamanho da entrada | Tempo da regex antiga |
+|---|---|---|
+| 14 | 37 caracteres | 63 ms |
+| 16 | 41 caracteres | 251 ms |
+| 18 | 45 caracteres | 1.055 ms |
+| 20 | 49 caracteres | **10.583 ms** |
+
+Cada 4 caracteres a mais multiplicam o tempo por 4 a 10. A regex que validava o início (`^\s*(--[^\n]*\n\s*)*(SELECT|WITH)`) tinha o mesmo padrão aninhado e também foi removida. O Quality Gate do PR reprovou com `new_security_rating = E` (o limite é A).
+
+**Risco real neste caso.** Baixo: o texto analisado é um arquivo do próprio repositório, lido uma vez quando a API sobe, e não vem do usuário. Mesmo assim, a correção é obrigatória. O código poderia ser reaproveitado com entrada externa, e o padrão é uma vulnerabilidade conhecida (CWE-1333).
+
+**Como foi corrigido.** O parser foi reescrito para processar o arquivo **linha a linha**, só com operações simples de string, **sem nenhuma expressão regular**:
+- `split('\n')` separa as linhas, e `endsWith('\r')` trata as quebras de linha do Windows;
+- `startsWith('-- @consulta ')` identifica o marcador de cada consulta;
+- linhas que começam com `\` (como `\echo`) são ignoradas;
+- a consulta termina na primeira linha cujo `trimEnd()` termina em `;`, e o `;` é retirado com `slice`;
+- depois do `;` só podem vir comentários ou linhas vazias; caso contrário, o arquivo é recusado por ter "mais de um comando";
+- a primeira linha útil precisa começar com `SELECT` ou `WITH`, e o nome da consulta só aceita `a-z`, `0-9` e `-`.
+
+Cada linha é examinada uma vez, então o tempo é **linear**: a mesma entrada patológica, com 100.000 caracteres, é processada em **0,4 ms**. As 3 consultas geradas são **idênticas, byte a byte**, às da versão anterior, e a API devolve os mesmos resultados. Há um teste de desempenho que falha se o parser levar mais de 200 ms com essa entrada, além de testes de CRLF, comentários depois do `;`, dois comandos, ausência de `;`, nome inválido e consulta duplicada.
+
+**Perguntas prováveis**
+
+1. *Se o arquivo SQL não vem do usuário, por que corrigir?*
+   Porque a vulnerabilidade está no **código**, não só no uso atual. Amanhã alguém pode reaproveitar a função com um texto vindo de uma requisição. Além disso, o Quality Gate trata qualquer vulnerabilidade nova como bloqueante, e o QSS avalia justamente esse processo: detectar, corrigir e comprovar com o relatório de antes e depois.
+
+2. *Toda regex é perigosa?*
+   Não. O perigo está em quantificadores **aninhados** ou **alternativas sobrepostas**, que deixam o mesmo trecho ser casado de várias formas, como `(a+)+`, `(a|a)*` ou `(\s*x)*`. Regex simples, sem repetição dentro de repetição, como `^\d{4}-\d{2}-\d{2}$` (usada na validação de datas), rodam em tempo linear. Quando a regra é simples, operações de string também são mais legíveis.
+
+3. *Por que o ReDoS é tão grave no Node.js em particular?*
+   Porque o Node executa o JavaScript num único *event loop*. Uma regex presa em backtracking ocupa essa thread, e todas as outras requisições, inclusive as de outros usuários, ficam esperando. Com 50 caracteres, um atacante segura a API por 10 segundos. Repetindo a chamada, deixa o sistema indisponível.

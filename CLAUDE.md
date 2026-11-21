@@ -79,6 +79,9 @@ deploy, SonarCloud, artigo, slides.
   `BEGIN`, `set_config('app.usuario_id', ...)`, `COMMIT`/`ROLLBACK`.
 - Erros: lançar as classes de `src/errors.js`; o middleware `erros.js` formata a resposta.
 - `app.set('trust proxy', 1)`: a API roda atrás de 1 proxy (NGINX) no deploy.
+- Consultas BD2: a fonte única é `database/04_consultas_bd2.sql`. Cada consulta começa com
+  `-- @consulta <nome>` e é exposta em `/api/kpis/<nome>` (`src/consultasBd2.js`). Não copiar
+  o SQL para o JavaScript.
 - Testes em `backend/tests/*.test.js`. Cada arquivo cria e remove os próprios dados
   (`tests/helpers.js`).
 

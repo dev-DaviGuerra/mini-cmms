@@ -6,6 +6,7 @@ import authRoutes from './routes/auth.js';
 import osRoutes from './routes/os.js';
 import equipamentosRoutes from './routes/equipamentos.js';
 import { pecasRouter, alertasRouter } from './routes/pecas.js';
+import kpisRoutes from './routes/kpis.js';
 import { rotaNaoEncontrada, tratarErros } from './middlewares/erros.js';
 
 export const app = express();
@@ -33,6 +34,7 @@ app.use('/api/os', osRoutes);
 app.use('/api/equipamentos', equipamentosRoutes);
 app.use('/api/pecas', pecasRouter);
 app.use('/api/alertas', alertasRouter);
+app.use('/api/kpis', kpisRoutes);
 
 app.use(rotaNaoEncontrada);
 app.use(tratarErros);
