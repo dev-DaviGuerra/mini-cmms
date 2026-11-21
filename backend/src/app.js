@@ -8,6 +8,7 @@ import osRoutes from './routes/os.js';
 import equipamentosRoutes from './routes/equipamentos.js';
 import { pecasRouter, alertasRouter } from './routes/pecas.js';
 import kpisRoutes from './routes/kpis.js';
+import usuariosRoutes from './routes/usuarios.js';
 import { rotaNaoEncontrada, tratarErros } from './middlewares/erros.js';
 
 const emProducao = process.env.NODE_ENV === 'production';
@@ -79,6 +80,7 @@ app.use('/api/equipamentos', equipamentosRoutes);
 app.use('/api/pecas', pecasRouter);
 app.use('/api/alertas', alertasRouter);
 app.use('/api/kpis', kpisRoutes);
+app.use('/api/usuarios', usuariosRoutes);
 
 app.use(rotaNaoEncontrada);
 app.use(tratarErros);
