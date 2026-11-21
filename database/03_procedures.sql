@@ -100,3 +100,58 @@ BEGIN
       FROM base b
      ORDER BY b.tag;
 END $$;
+
+
+-- =====================================================================
+-- sp_entrada_estoque(p_peca_id, p_qtd, p_usuario_id)
+--
+-- PROCEDURE de verdade (CREATE PROCEDURE, chamada com CALL): não devolve
+-- linhas, só executa uma ação. Dá entrada de material no estoque:
+--   1. soma p_qtd ao estoque da peça;
+--   2. grava a movimentação ENTRADA (rastreabilidade);
+--   3. se o estoque voltou a ficar >= estoque_min, marca os alertas
+--      pendentes da peça como resolvidos.
+--
+-- Não faz COMMIT por conta própria: quem chama decide a transação. Assim a
+-- API pode chamá-la dentro de um BEGIN ... COMMIT junto com outros passos,
+-- e qualquer erro (peça inexistente, qtd inválida, usuário inválido) desfaz
+-- tudo.
+-- Uso:  CALL sp_entrada_estoque(1, 10, 4);
+-- =====================================================================
+
+DROP PROCEDURE IF EXISTS sp_entrada_estoque(INTEGER, INTEGER, INTEGER);
+
+CREATE OR REPLACE PROCEDURE sp_entrada_estoque(
+    p_peca_id    INTEGER,
+    p_qtd        INTEGER,
+    p_usuario_id INTEGER
+)
+LANGUAGE plpgsql AS $$
+DECLARE
+    v_estoque     INTEGER;
+    v_estoque_min INTEGER;
+BEGIN
+    IF p_qtd IS NULL OR p_qtd <= 0 THEN
+        RAISE EXCEPTION 'Quantidade de entrada deve ser maior que zero (recebido: %)', p_qtd;
+    END IF;
+
+    UPDATE pecas
+       SET estoque = estoque + p_qtd
+     WHERE id = p_peca_id
+    RETURNING estoque, estoque_min INTO v_estoque, v_estoque_min;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Peça % não encontrada', p_peca_id;
+    END IF;
+
+    -- usuario_id inválido é barrado pela FK de movimentacoes
+    INSERT INTO movimentacoes (peca_id, tipo, qtd, usuario_id)
+    VALUES (p_peca_id, 'ENTRADA', p_qtd, p_usuario_id);
+
+    IF v_estoque >= v_estoque_min THEN
+        UPDATE alertas_estoque
+           SET resolvido = TRUE
+         WHERE peca_id = p_peca_id
+           AND NOT resolvido;
+    END IF;
+END $$;
