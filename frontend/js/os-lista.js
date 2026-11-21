@@ -1,13 +1,13 @@
-// Lista de OS com filtros e paginação; formulário de abertura para OPERADOR e SUPERVISOR.
+// Lista de OS: indicadores, filtros, paginação e drawer "Nova OS" (OPERADOR e SUPERVISOR).
 import { api, exigirLogin, ErroApi } from './api.js';
 import {
-  el, limpar, badgeStatus, badgePrioridade, formatarDataHora, preencherSelect,
-  mostrarMensagem, esconderMensagem, montarCabecalho,
+  el, limpar, marcaStatus, marcaPrioridade, formatarDataHoraCurta, preencherSelect, classeDe,
+  mostrarMensagem, esconderMensagem, montarLayout, linhasSkeleton, estadoVazio,
   ROTULOS_STATUS, ROTULOS_PRIORIDADE, ROTULOS_TIPO,
 } from './ui.js';
 
 const usuario = await exigirLogin();
-montarCabecalho(usuario, 'os');
+montarLayout(usuario, 'os');
 
 const POR_PAGINA = 20;
 let offset = 0;
@@ -17,15 +17,41 @@ const $ = (id) => document.getElementById(id);
 const caixa = $('mensagem');
 const filtros = $('filtros');
 const linhas = $('linhas');
-const formNova = $('form-nova');
-const secaoNova = $('secao-nova');
 
-function erroParaTela(erro, prefixo = '') {
+function mensagemDeErro(alvo, erro, prefixo = '') {
   if (erro instanceof ErroApi) {
-    mostrarMensagem(caixa, prefixo + erro.mensagem, 'erro', Array.isArray(erro.detalhes) ? erro.detalhes : null);
+    mostrarMensagem(alvo, prefixo + erro.mensagem, 'erro', Array.isArray(erro.detalhes) ? erro.detalhes : null);
   } else {
-    mostrarMensagem(caixa, `${prefixo}Erro inesperado: ${erro.message}`);
+    mostrarMensagem(alvo, `${prefixo}Erro inesperado: ${erro.message}`);
   }
+}
+
+// ---- indicadores (GET /api/kpis/resumo) --------------------------------------------
+const botoesIndicador = [...document.querySelectorAll('.indicador[data-status]')];
+
+async function carregarIndicadores() {
+  try {
+    const r = await api.get('/kpis/resumo');
+    $('kpi-abertas').textContent = r.os_abertas;
+    $('kpi-andamento').textContent = r.os_em_andamento;
+    $('kpi-aguardando').textContent = r.os_aguardando_peca;
+    $('kpi-parados').textContent = r.equipamentos_parados;
+  } catch {
+    for (const id of ['kpi-abertas', 'kpi-andamento', 'kpi-aguardando', 'kpi-parados']) $(id).textContent = '—';
+  }
+}
+
+// o indicador do status filtrado fica "pressionado"
+function sincronizarIndicadores() {
+  const status = filtros.status.value;
+  for (const b of botoesIndicador) b.setAttribute('aria-pressed', String(b.dataset.status === status));
+}
+
+for (const botao of botoesIndicador) {
+  botao.addEventListener('click', () => {
+    filtros.status.value = filtros.status.value === botao.dataset.status ? '' : botao.dataset.status;
+    void recarregarDoInicio();
+  });
 }
 
 // ---- equipamentos (filtro e formulário) -------------------------------------------
@@ -33,29 +59,38 @@ async function carregarEquipamentos() {
   const equipamentos = await api.get('/equipamentos');
   const filtroEq = $('filtro-equipamento');
   const novaEq = $('nova-equipamento');
-  const selecionadoFiltro = filtroEq.value;
+  const selecionado = filtroEq.value;
   filtroEq.length = 1; // mantém "Todos"
   novaEq.length = 1;   // mantém "Selecione…"
   preencherSelect(filtroEq, equipamentos.map((e) => [e.id, `${e.tag} — ${e.nome}`]));
   preencherSelect(novaEq, equipamentos.map((e) => [e.id, `${e.tag} — ${e.nome} (${e.status === 'PARADO' ? 'parado' : 'operando'})`]));
-  filtroEq.value = selecionadoFiltro;
+  filtroEq.value = selecionado;
 }
 
 // ---- lista ------------------------------------------------------------------------
+const SKELETON = [
+  { tamanho: 'curto' }, { tamanho: 'medio' }, { tamanho: 'longo', coluna: 'col-descricao' }, { tamanho: 'medio' },
+  { tamanho: 'curto' }, { tamanho: 'medio' }, { tamanho: 'medio' }, { tamanho: 'medio' },
+];
+
 function linhaOs(os) {
-  const linkOs = el('a', { texto: `#${os.id}`, attrs: { href: `os-detalhe.html?id=${encodeURIComponent(os.id)}` } });
-  return el('tr', {}, [
-    el('td', {}, [linkOs]),
-    el('td', {}, [
-      el('span', { classe: 'tag-equip', texto: os.equipamento_tag }),
-      el('span', { classe: 'texto-secundario', texto: os.equipamento_nome }),
+  return el('tr', { classe: `prioridade-${classeDe(os.prioridade)}` }, [
+    el('td', {}, [el('a', { classe: 'num-os', texto: `#${os.id}`, attrs: { href: `os-detalhe.html?id=${encodeURIComponent(os.id)}` } })]),
+    el('td', { classe: 'equip' }, [
+      el('span', { classe: 'tag-equip', texto: os.equipamento_tag, attrs: { title: os.equipamento_nome ?? '' } }),
+      el('span', { classe: 'nome-equip', texto: os.equipamento_nome }),
     ]),
-    el('td', { texto: ROTULOS_TIPO[os.tipo] ?? os.tipo }),
-    el('td', {}, [badgePrioridade(os.prioridade)]),
-    el('td', {}, [badgeStatus(os.status)]),
-    el('td', { texto: formatarDataHora(os.aberta_em) }),
-    el('td', { texto: os.tecnico_nome ?? '—' }),
+    el('td', { classe: 'col-descricao' }, [el('span', { classe: 'descricao-curta', texto: os.descricao, attrs: { title: os.descricao ?? '' } })]),
+    el('td', { classe: 'curta', texto: ROTULOS_TIPO[os.tipo] ?? os.tipo }),
+    el('td', { classe: 'curta' }, [marcaPrioridade(os.prioridade)]),
+    el('td', {}, [marcaStatus(os.status)]),
+    el('td', {}, [el('span', { classe: 'data', texto: formatarDataHoraCurta(os.aberta_em), attrs: { title: new Date(os.aberta_em).toLocaleString('pt-BR') } })]),
+    el('td', { classe: 'curta', texto: os.tecnico_nome ?? '—' }),
   ]);
+}
+
+function filtrosAtivos() {
+  return [...new FormData(filtros).values()].some(Boolean);
 }
 
 async function carregarLista() {
@@ -63,24 +98,33 @@ async function carregarLista() {
   for (const [nome, valor] of new FormData(filtros)) if (valor) parametros.set(nome, valor);
   parametros.set('limit', POR_PAGINA);
   parametros.set('offset', offset);
+  sincronizarIndicadores();
 
+  limpar(linhas);
+  linhas.append(...linhasSkeleton(8, SKELETON));
   linhas.setAttribute('aria-busy', 'true');
   try {
     const { dados, paginacao } = await api.get(`/os?${parametros}`);
     total = paginacao.total;
     limpar(linhas);
     if (!dados.length) {
-      linhas.append(el('tr', {}, [el('td', { classe: 'vazio', texto: 'Nenhuma OS encontrada com esses filtros.', attrs: { colspan: 7 } })]));
+      const vazio = filtrosAtivos()
+        ? estadoVazio({ titulo: 'Nenhuma OS encontrada', texto: 'Nenhuma ordem de serviço corresponde a esses filtros.', acao: { texto: 'Limpar filtros', aoClicar: limparFiltros } })
+        : estadoVazio({ titulo: 'Nenhuma OS cadastrada', texto: 'Quando uma ordem de serviço for aberta, ela aparece aqui.' });
+      linhas.append(el('tr', {}, [el('td', { attrs: { colspan: 8 } }, [vazio])]));
     }
     for (const os of dados) linhas.append(linhaOs(os));
 
     const de = total ? offset + 1 : 0;
     const ate = Math.min(offset + POR_PAGINA, total);
-    $('info-paginacao').textContent = `${de}–${ate} de ${total}`;
+    const info = $('info-paginacao');
+    limpar(info);
+    info.append(el('span', { classe: 'mono', texto: `${de}–${ate}` }), ' de ', el('span', { classe: 'mono', texto: total }), ' ordens');
     $('botao-anterior').disabled = offset === 0;
     $('botao-proxima').disabled = offset + POR_PAGINA >= total;
   } catch (erro) {
-    erroParaTela(erro, 'Não foi possível carregar as OS: ');
+    limpar(linhas);
+    mensagemDeErro(caixa, erro, 'Não foi possível carregar as OS: ');
   } finally {
     linhas.removeAttribute('aria-busy');
   }
@@ -91,23 +135,57 @@ function recarregarDoInicio() {
   return carregarLista();
 }
 
-// ---- abrir OS (OPERADOR e SUPERVISOR) ---------------------------------------------
-// A tela só esconde o botão; quem garante a permissão é a API (403 para outros perfis).
-const podeAbrir = ['OPERADOR', 'SUPERVISOR'].includes(usuario.perfil);
-$('botao-nova').hidden = !podeAbrir;
+function limparFiltros() {
+  filtros.reset();
+  void recarregarDoInicio();
+}
 
-$('botao-nova').addEventListener('click', () => {
-  secaoNova.hidden = false;
+// ---- drawer "Nova OS" -------------------------------------------------------------
+// A tela só esconde o botão; quem garante a permissão é a API (403 para outros perfis).
+const drawer = $('drawer-nova');
+const fundo = $('fundo-drawer');
+const formNova = $('form-nova');
+const caixaNova = $('mensagem-nova');
+const botaoNova = $('botao-nova');
+botaoNova.hidden = !['OPERADOR', 'SUPERVISOR'].includes(usuario.perfil);
+
+function abrirDrawer() {
+  esconderMensagem(caixaNova);
+  drawer.inert = false;
+  drawer.classList.add('aberto');
+  fundo.classList.add('visivel');
+  document.body.classList.add('drawer-aberto');
   $('nova-equipamento').focus();
-});
-$('botao-cancelar-nova').addEventListener('click', () => {
+}
+
+function fecharDrawer() {
+  drawer.classList.remove('aberto');
+  fundo.classList.remove('visivel');
+  document.body.classList.remove('drawer-aberto');
+  drawer.inert = true; // fora do foco do teclado enquanto fechado
   formNova.reset();
-  secaoNova.hidden = true;
+  $('nova-prioridade').value = 'MEDIA';
+  botaoNova.focus();
+}
+
+botaoNova.addEventListener('click', abrirDrawer);
+for (const alvo of document.querySelectorAll('[data-fechar-drawer]')) alvo.addEventListener('click', fecharDrawer);
+document.addEventListener('keydown', (evento) => {
+  if (!drawer.classList.contains('aberto')) return;
+  if (evento.key === 'Escape') fecharDrawer();
+  // mantém o Tab dentro do drawer (modal)
+  if (evento.key === 'Tab') {
+    const focaveis = [...drawer.querySelectorAll('button, select, textarea, input')].filter((e) => !e.disabled);
+    const primeiro = focaveis[0];
+    const ultimo = focaveis.at(-1);
+    if (evento.shiftKey && document.activeElement === primeiro) { evento.preventDefault(); ultimo.focus(); }
+    else if (!evento.shiftKey && document.activeElement === ultimo) { evento.preventDefault(); primeiro.focus(); }
+  }
 });
 
 formNova.addEventListener('submit', async (evento) => {
   evento.preventDefault();
-  esconderMensagem(caixa);
+  esconderMensagem(caixaNova);
   const dados = {
     equipamentoId: Number(formNova.equipamentoId.value),
     tipo: formNova.tipo.value,
@@ -121,7 +199,7 @@ formNova.addEventListener('submit', async (evento) => {
   if (!dados.equipamentoId) problemas.push('Selecione o equipamento.');
   if (dados.descricao.length < 5) problemas.push('Descreva a falha (mínimo de 5 caracteres).');
   if (problemas.length) {
-    mostrarMensagem(caixa, 'Confira os campos da OS:', 'erro', problemas);
+    mostrarMensagem(caixaNova, 'Confira os campos da OS:', 'erro', problemas);
     return;
   }
 
@@ -129,25 +207,23 @@ formNova.addEventListener('submit', async (evento) => {
   botao.disabled = true;
   try {
     const os = await api.post('/os', dados);
+    fecharDrawer();
     mostrarMensagem(caixa, `OS #${os.id} aberta para ${os.equipamento_tag}. O equipamento agora está PARADO.`, 'sucesso');
-    formNova.reset();
-    secaoNova.hidden = true;
-    await carregarEquipamentos();
-    await recarregarDoInicio();
+    await Promise.all([carregarEquipamentos(), carregarIndicadores(), recarregarDoInicio()]);
   } catch (erro) {
-    erroParaTela(erro, 'A OS não foi aberta: ');
+    mensagemDeErro(caixaNova, erro, 'A OS não foi aberta: ');
   } finally {
     botao.disabled = false;
   }
 });
 
-// ---- eventos dos filtros e da paginação -------------------------------------------
+// ---- filtros e paginação ----------------------------------------------------------
 // carregarLista() trata os próprios erros (mostra a mensagem na tela) e nunca rejeita;
 // por isso, nos tratadores de evento, a promessa é ignorada de forma explícita com "void".
 filtros.addEventListener('change', () => { void recarregarDoInicio(); });
 filtros.addEventListener('submit', (e) => { e.preventDefault(); void recarregarDoInicio(); });
-$('botao-limpar').addEventListener('click', () => { filtros.reset(); void recarregarDoInicio(); });
-$('botao-atualizar').addEventListener('click', () => { void carregarLista(); });
+$('botao-limpar').addEventListener('click', limparFiltros);
+$('botao-atualizar').addEventListener('click', () => { void carregarIndicadores(); void carregarLista(); });
 $('botao-anterior').addEventListener('click', () => {
   offset = Math.max(0, offset - POR_PAGINA);
   void carregarLista();
@@ -165,9 +241,10 @@ preencherSelect($('nova-tipo'), Object.entries(ROTULOS_TIPO));
 preencherSelect($('nova-prioridade'), Object.entries(ROTULOS_PRIORIDADE));
 $('nova-prioridade').value = 'MEDIA';
 
+void carregarIndicadores();
 try {
   await carregarEquipamentos();
 } catch (erro) {
-  erroParaTela(erro, 'Não foi possível carregar os equipamentos: ');
+  mensagemDeErro(caixa, erro, 'Não foi possível carregar os equipamentos: ');
 }
 await carregarLista();

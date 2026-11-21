@@ -76,6 +76,10 @@ npm test           # node:test + supertest; usa SEMPRE o DATABASE_URL_TEST (cmms
 
 O `JWT_SECRET` do `backend/.env` precisa ter pelo menos 32 caracteres; a API não sobe sem ele.
 
+`LOGIN_RATE_LIMIT_MAX` define quantas tentativas de login cada IP pode fazer a cada 15 minutos.
+O padrão é 10, que é o valor de produção. Em desenvolvimento pode ser maior (ex.: 100), para os
+testes no navegador não bloquearem o login.
+
 O `npm test` roda com `NODE_ENV=test`. Nesse modo, a API se recusa a usar o banco de
 desenvolvimento. Os testes criam e apagam os próprios usuários, equipamentos e OS; o
 `cmms_test` só precisa dos scripts `01..03`.
@@ -85,7 +89,7 @@ desenvolvimento. Os testes criam e apagam os próprios usuários, equipamentos e
 | Método | Rota | Perfil | Descrição |
 |---|---|---|---|
 | GET | `/api/health` | público | verificação de vida |
-| POST | `/api/auth/login` | público | `{ email, senha }` → `{ token, expiraEm, usuario }` (10 tentativas/15 min) |
+| POST | `/api/auth/login` | público | `{ email, senha }` → `{ token, expiraEm, usuario }` (`LOGIN_RATE_LIMIT_MAX` tentativas/15 min, padrão 10) |
 | GET | `/api/auth/me` | qualquer logado | dados do usuário do token |
 | POST | `/api/os` | OPERADOR, SUPERVISOR | abre OS: `{ equipamentoId, descricao, tipo?, prioridade? }` → 201; o equipamento passa a PARADO |
 | GET | `/api/os` | qualquer logado | lista `{ dados, paginacao: { limit, offset, total } }`; filtros `status`, `prioridade`, `equipamentoId`; `limit` (padrão 50, máx. 200) e `offset` (padrão 0) |
@@ -126,14 +130,29 @@ abra **http://localhost:3000**. No deploy, quem serve os arquivos é o NGINX.
 
 | Página | Conteúdo |
 |---|---|
-| `index.html` | login (o JWT fica no `sessionStorage`) |
-| `os.html` | lista de OS com filtros e paginação; "+ Nova OS" para OPERADOR e SUPERVISOR |
+| `index.html` | login em tela dividida (o JWT fica no `sessionStorage`) |
+| `os.html` | indicadores do `/api/kpis/resumo`, lista de OS com filtros e paginação; "+ Nova OS" em painel lateral para OPERADOR e SUPERVISOR |
+| `404.html` | página para endereços inexistentes fora de `/api` (dentro de `/api` a resposta é JSON) |
+
+Visual "sala de controle industrial": menu lateral grafite, uma única cor de destaque
+(amarelo de segurança `#F2A900`) e status em semáforo, com ponto colorido + texto. As fontes
+IBM Plex Sans e Mono ficam em `frontend/fontes/` (licença OFL). As cores, espaçamentos e
+fontes são **design tokens** (variáveis CSS) no topo de `css/estilo.css`, para as próximas
+telas reaproveitarem.
+
+As fontes vêm do npm (`@fontsource`), mas os arquivos copiados são versionados, então o deploy
+não precisa rodar npm no front. Para atualizá-las: `cd frontend && npm install && npm run vendor`.
+
+Capturas de antes e depois do redesign: `docs/capturas/redesign/`.
 
 Segurança no front:
 - todo dado vindo da API entra na página por `textContent`, nunca por `innerHTML` (contra XSS);
 - a CSP permite só scripts e estilos do próprio site (`'self'`), sem `'unsafe-inline'`;
 - `js/api.js` envia o token e, num 401, encerra a sessão e volta ao login;
-- a tela esconde botões conforme o perfil, mas quem garante a permissão é sempre a API.
+- a tela esconde botões conforme o perfil, mas quem garante a permissão é sempre a API;
+- sem CDN: fontes, logo e scripts são servidos pelo próprio site;
+- em desenvolvimento, `package.json`, `scripts/` e `node_modules/` do front não são servidos.
+  No NGINX do deploy, bloquear os mesmos caminhos.
 
 ## Fluxo de trabalho
 - Uma issue por funcionalidade, board no GitHub Projects (To Do / In Progress / Done).

@@ -243,6 +243,36 @@ Por isso os KPIs ficaram em FUNCTION (precisam devolver uma tabela consultável 
 
 ---
 
+## Redesign visual do front (issue #24)
+
+**O que foi feito**
+
+1. Novo visual "sala de controle industrial":
+   - menu lateral fixo em grafite, com logo SVG próprio (engrenagem), navegação (as telas futuras aparecem desabilitadas) e usuário, perfil e Sair no rodapé;
+   - base neutra fria e **uma única cor de destaque**, o amarelo de segurança `#F2A900`, usada nas ações principais e no foco.
+2. Status em **semáforo** (ponto colorido + texto) e prioridade como barra colorida na lateral da linha. A cor nunca é a única informação. As fontes IBM Plex Sans e Mono são **servidas localmente** em woff2 (licença OFL), sem CDN.
+3. Na lista: faixa de indicadores com `/api/kpis/resumo` (clicar num card filtra a lista), tabela mais densa com hover e "Nova OS" num **drawer** modal (foco preso dentro dele, Esc fecha e o foco volta ao botão). O login virou uma tela dividida, com faixas de segurança diagonais em CSS.
+4. Estados de **carregando** (skeleton + `aria-busy`), **lista vazia** (com "Limpar filtros") e **foco visível** pelo teclado. Todas as cores, espaçamentos e fontes viraram **design tokens** (variáveis CSS) para as próximas telas.
+5. Correções:
+   - rotas inexistentes fora de `/api` mostram uma `404.html` no visual novo, e `/api` continua respondendo JSON;
+   - o rate limit de login passou a vir do `.env` (`LOGIN_RATE_LIMIT_MAX`, padrão 10);
+   - `package.json`, `scripts/` e `node_modules/` do front não são mais servidos.
+
+   O teste em navegador real fez 30 verificações; a CSP continua sem `'unsafe-inline'`.
+
+**Perguntas prováveis**
+
+1. *Por que usar uma única cor de destaque e mostrar o status com ponto + texto?*
+   Numa sala de controle, a cor chama atenção para o que exige ação. Se tudo for colorido, nada se destaca. O amarelo fica reservado para a ação principal e o foco, e as cores de status seguem o semáforo. O texto ao lado do ponto atende ao critério de acessibilidade WCAG 1.4.1 ("não usar só a cor"). Cerca de 8% dos homens têm alguma deficiência na percepção de cores, e para eles "vermelho" e "verde" podem parecer iguais.
+
+2. *Por que servir as fontes localmente em vez de usar o Google Fonts?*
+   Por três motivos. **Segurança:** a CSP fica só com `'self'`, sem liberar domínios externos (`font-src`, `style-src`). **Privacidade:** o navegador do usuário não avisa um terceiro a cada acesso. **Disponibilidade:** a demo não depende da internet externa nem de um CDN no dia da apresentação. Usamos só o subconjunto `latin` (que cobre o português) em woff2, o formato mais compacto, somando cerca de 136 KB.
+
+3. *O que são design tokens e qual a vantagem?*
+   São as decisões visuais com nome: `--destaque`, `--esp-3`, `--fonte-mono`, `--status-aberta`. Os componentes usam o nome, nunca o valor solto. Para mudar o amarelo do sistema inteiro, basta alterar uma linha, e as telas novas (detalhe da OS, dashboard) já nascem consistentes com as antigas. Eles também documentam o visual: quem lê o `:root` do CSS entende a paleta e a escala de espaçamento do projeto.
+
+---
+
 ## Segurança (QSS)
 
 Registro das correções e dos controles de segurança, para o relatório do QSS.
@@ -296,3 +326,10 @@ Cada linha é examinada uma vez, então o tempo é **linear**: a mesma entrada p
 - **O que o Sonar apontou:** 3 chamadas de `carregarLista()` em tratadores de evento sem `await`, `.catch()` ou `void`, ou seja, promessas "soltas". Uma promessa rejeitada sem tratamento vira um erro silencioso (*unhandled rejection*): a tela para de atualizar e ninguém fica sabendo por quê. Isso derrubou a nota de confiabilidade do PR para C e reprovou o Quality Gate.
 - **Risco real:** nenhum erro se perdia, porque `carregarLista()` captura as próprias exceções e mostra a mensagem na tela; ela nunca rejeita. Mas o código não deixava essa intenção visível.
 - **Correção:** `recarregarDoInicio()` passou a devolver a promessa e é aguardada com `await` depois de abrir uma OS. Nos tratadores de evento, onde não há o que aguardar, a promessa é ignorada de forma **explícita** com `void carregarLista()`, com um comentário explicando por que é seguro.
+
+### S3 — Rate limit configurável, 404 do front e arquivos internos (PR da #24)
+
+- **Rate limit de login:** a variável `LOGIN_RATE_LIMIT_MAX` tem padrão **10 tentativas por IP a cada 15 min**, que é o valor de produção. Valores inválidos impedem a API de subir (inteiro de 1 a 10.000, com teste). O limite maior (100) existe só no `.env` de desenvolvimento, para os testes automatizados de navegador.
+- **404 do front:** endereços inexistentes fora de `/api` devolvem a página `404.html`, sem detalhes internos. Dentro de `/api`, a resposta continua sendo o JSON padronizado.
+- **Exposição de arquivos:** como o Express serve a pasta `frontend/`, os caminhos `package.json`, `package-lock.json`, `scripts/` e `node_modules/` respondem 404 (com teste). Assim não se revelam versões de dependências, que ajudariam a escolher um exploit. No NGINX do deploy, os mesmos caminhos devem ser bloqueados.
+- **Sem recursos externos:** um teste falha se algum HTML, CSS ou JS do front apontar para uma URL externa ou usar `@import`. No navegador, a verificação "nenhuma requisição a domínio externo" passou.

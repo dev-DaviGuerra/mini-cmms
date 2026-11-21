@@ -96,8 +96,26 @@ deploy, SonarCloud, artigo, slides.
   (também há teste). Estilos só em `css/estilo.css`; eventos com `addEventListener`.
 - Esconder botões por perfil é só conforto; a permissão é sempre validada na API.
 - Teste no navegador: Edge headless com `puppeteer-core` instalado no scratchpad (fora do
-  projeto). Cada rodada faz vários logins; o rate limit de login é 10/15 min por IP, então
-  reinicie a API antes de repetir.
+  projeto). O `.env` de desenvolvimento tem `LOGIN_RATE_LIMIT_MAX=100`, então as rodadas não
+  bloqueiam o login. Em produção o padrão é 10.
+
+## Visual (redesign da #24) — seguir em todas as telas novas
+- Conceito "sala de controle industrial". Usar **só os design tokens** do topo de
+  `css/estilo.css` (cores, `--esp-*`, `--texto-*`, `--raio*`, sombras); não inventar cores soltas.
+- Uma única cor de destaque: `--destaque` (amarelo de segurança `#F2A900`), para a ação
+  principal da tela (`.botao.primario`) e o foco. Texto sobre ela: `--sobre-destaque`.
+- Status de OS = `marcaStatus()` de `ui.js` (ponto colorido + texto), nunca só cor.
+  Prioridade = `marcaPrioridade()` + barra lateral na linha (`tr.prioridade-*`).
+- Números, tags, nº de OS e datas em `--fonte-mono` (IBM Plex Mono); texto em IBM Plex Sans.
+  Fontes locais em `frontend/fontes/`, sem CDN (há teste contra URLs externas).
+- Página nova do app: `<body class="app">`, `<aside id="menu" class="menu-lateral">`,
+  `<main class="conteudo">` e `montarLayout(usuario, '<id>')`. Ao criar a tela, ativar o item
+  correspondente em `ITENS_MENU` (`ui.js`), dando um `href`.
+- Estados obrigatórios: carregando (`linhasSkeleton()` + `aria-busy`), vazio (`estadoVazio()`)
+  e foco visível pelo teclado (`:focus-visible` já está no CSS).
+- Formulários secundários em drawer (`.drawer` + `inert` quando fechado, Esc fecha e o foco volta
+  ao botão).
+- Rotas inexistentes fora de `/api` mostram `404.html` (caminhos absolutos nela).
 
 ## Comandos
 ```bash

@@ -48,9 +48,19 @@ app.use(helmet({
 app.use(express.json({ limit: '100kb' }));         // corpo JSON com tamanho limitado
 
 // Em desenvolvimento o próprio Express serve o front (pasta frontend/).
-// No deploy quem serve os arquivos estáticos é o NGINX.
+// No deploy quem serve os arquivos estáticos é o NGINX (com a mesma 404.html).
+const ehApi = (req) => req.path === '/api' || req.path.startsWith('/api/');
+const paginaNaoEncontrada = (_req, res) => res.status(404).sendFile('404.html', { root: PASTA_FRONT });
+// arquivos de desenvolvimento do front que não devem ser servidos
+const INTERNOS_DO_FRONT = ['/node_modules', '/scripts', '/package.json', '/package-lock.json'];
+
 if (!emProducao) {
+  app.use((req, res, next) => (
+    INTERNOS_DO_FRONT.some((p) => req.path === p || req.path.startsWith(`${p}/`)) ? paginaNaoEncontrada(req, res) : next()
+  ));
   app.use(express.static(PASTA_FRONT, { index: 'index.html' }));
+  // qualquer outra rota fora de /api que não existe: página 404 amigável (o JSON fica só para /api)
+  app.use((req, res, next) => (ehApi(req) ? next() : paginaNaoEncontrada(req, res)));
 }
 
 // Limite geral por IP para toda a API

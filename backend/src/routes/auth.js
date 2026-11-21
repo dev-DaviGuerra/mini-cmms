@@ -3,14 +3,16 @@ import { Router } from 'express';
 import { rateLimit } from 'express-rate-limit';
 import { autenticar } from '../middlewares/auth.js';
 import { ErroValidacao } from '../errors.js';
+import { config } from '../config.js';
 import * as authService from '../services/authService.js';
 
 const router = Router();
 
-// Limite mais rígido no login para dificultar ataque de força bruta em senhas
+// Limite mais rígido no login para dificultar ataque de força bruta em senhas.
+// LOGIN_RATE_LIMIT_MAX no .env (padrão 10 tentativas por IP a cada 15 minutos).
 const limiteLogin = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 10,
+  limit: config.loginRateLimitMax,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   message: {

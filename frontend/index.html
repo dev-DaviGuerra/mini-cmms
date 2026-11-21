@@ -4,32 +4,52 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Entrar · Mini-CMMS</title>
+  <link rel="icon" href="img/logo.svg" type="image/svg+xml">
+  <link rel="preload" href="fontes/ibm-plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fontes/ibm-plex-sans-600.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="css/estilo.css">
   <script type="module" src="js/login.js"></script>
 </head>
 <body class="pagina-login">
-  <main class="cartao-login">
-    <div class="marca-login">
-      <span class="marca-icone" aria-hidden="true"></span>
-      <div>
-        <h1>Mini-CMMS</h1>
-        <p class="subtitulo">Ordens de manutenção e estoque de peças</p>
-      </div>
+  <section class="login-marca" aria-label="Sobre o sistema">
+    <div class="login-logo">
+      <img src="img/logo.svg" alt="" width="40" height="40">
+      <span>Mini-CMMS</span>
     </div>
 
-    <div id="mensagem" role="alert" hidden></div>
+    <div class="login-chamada">
+      <h1>Manutenção sob controle.</h1>
+      <p>Ordens de serviço, estoque de peças e indicadores de manutenção da fábrica num só painel.</p>
+      <ul class="login-modulos" aria-label="Módulos">
+        <li>OS</li>
+        <li>MTTR</li>
+        <li>MTBF</li>
+        <li>Estoque</li>
+      </ul>
+    </div>
 
-    <form id="form-login" novalidate>
-      <label for="email">E-mail</label>
-      <input id="email" name="email" type="email" autocomplete="username" required>
+    <p class="login-nota">Projeto acadêmico · todos os dados são fictícios</p>
+  </section>
 
-      <label for="senha">Senha</label>
-      <input id="senha" name="senha" type="password" autocomplete="current-password" required>
+  <main class="login-formulario">
+    <div class="login-cartao">
+      <h2>Entrar</h2>
+      <p>Use o e-mail e a senha do seu perfil.</p>
 
-      <button id="botao-entrar" type="submit" class="botao primario largo">Entrar</button>
-    </form>
+      <div id="mensagem" role="alert" hidden></div>
 
-    <p class="rodape-login">Projeto acadêmico · todos os dados são fictícios</p>
+      <form id="form-login" novalidate>
+        <div class="campo">
+          <label for="email">E-mail</label>
+          <input id="email" name="email" type="email" autocomplete="username" required>
+        </div>
+        <div class="campo">
+          <label for="senha">Senha</label>
+          <input id="senha" name="senha" type="password" autocomplete="current-password" required>
+        </div>
+        <button id="botao-entrar" type="submit" class="botao primario largo">Entrar</button>
+      </form>
+    </div>
   </main>
 </body>
 </html>

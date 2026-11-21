@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="titulo-logo">
+  <title id="titulo-logo">Mini-CMMS</title>
+  <!-- Engrenagem de 8 dentes em amarelo de segurança, com anel grafite e cubo central.
+       Só atributos de apresentação (sem style=""), por causa da CSP. -->
+  <g fill="#F2A900">
+    <rect x="27" y="3" width="10" height="13" rx="2"/>
+    <rect x="27" y="3" width="10" height="13" rx="2" transform="rotate(45 32 32)"/>
+    <rect x="27" y="3" width="10" height="13" rx="2" transform="rotate(90 32 32)"/>
+    <rect x="27" y="3" width="10" height="13" rx="2" transform="rotate(135 32 32)"/>
+    <rect x="27" y="3" width="10" height="13" rx="2" transform="rotate(180 32 32)"/>
+    <rect x="27" y="3" width="10" height="13" rx="2" transform="rotate(225 32 32)"/>
+    <rect x="27" y="3" width="10" height="13" rx="2" transform="rotate(270 32 32)"/>
+    <rect x="27" y="3" width="10" height="13" rx="2" transform="rotate(315 32 32)"/>
+    <circle cx="32" cy="32" r="20"/>
+  </g>
+  <circle cx="32" cy="32" r="11" fill="#1B1F24"/>
+  <circle cx="32" cy="32" r="5" fill="#F2A900"/>
+</svg>
