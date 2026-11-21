@@ -99,6 +99,42 @@ export function criarValidador() {
       return valor;
     },
 
+    // Política de senha: 10+ caracteres, com pelo menos uma letra e um número.
+    // Máximo de 72 BYTES: o bcrypt ignora o que passa disso (acentos ocupam 2 bytes em UTF-8).
+    senha(valor, campo) {
+      if (typeof valor !== 'string') {
+        problemas.push(`${campo} é obrigatória`);
+        return undefined;
+      }
+      const antes = problemas.length;
+      if (valor.length < 10) problemas.push(`${campo} deve ter pelo menos 10 caracteres`);
+      if (Buffer.byteLength(valor, 'utf8') > 72) problemas.push(`${campo} deve ter no máximo 72 bytes`);
+      if (!/\p{L}/u.test(valor)) problemas.push(`${campo} deve ter pelo menos uma letra`);
+      if (!/\d/.test(valor)) problemas.push(`${campo} deve ter pelo menos um número`);
+      return problemas.length === antes ? valor : undefined;
+    },
+
+    email(valor, campo) {
+      const texto = typeof valor === 'string' ? valor.trim().toLowerCase() : '';
+      // validação simples, sem quantificadores aninhados (sem risco de ReDoS)
+      const partes = texto.split('@');
+      const valido = texto.length <= 150 && partes.length === 2 && partes[0].length > 0
+        && partes[1].includes('.') && !partes[1].startsWith('.') && !partes[1].endsWith('.') && !/\s/.test(texto);
+      if (!valido) {
+        problemas.push(`${campo} deve ser um e-mail válido`);
+        return undefined;
+      }
+      return texto;
+    },
+
+    booleano(valor, campo) {
+      if (typeof valor !== 'boolean') {
+        problemas.push(`${campo} deve ser true ou false`);
+        return undefined;
+      }
+      return valor;
+    },
+
     // Problema que não cabe nos validadores acima (ex.: regra entre dois campos)
     erro(mensagem) {
       problemas.push(mensagem);
