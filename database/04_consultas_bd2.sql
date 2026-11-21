@@ -2,6 +2,10 @@
 -- Mini-CMMS — 04_consultas_bd2.sql
 -- Três consultas complexas para a disciplina de BD2.
 -- Rodar depois do seed:  psql "$DATABASE_URL" -f database/04_consultas_bd2.sql
+--
+-- A API (backend/src/consultasBd2.js) lê ESTE arquivo e expõe cada consulta em
+-- /api/kpis/<nome>. A linha "-- @consulta <nome>" marca o início de cada uma; as linhas
+-- "\echo" são só do psql e a API as ignora. Ao editar, mantenha uma consulta por marcador.
 -- =====================================================================
 
 
@@ -10,6 +14,7 @@
 -- Usa a função sp_kpis_equipamento nos últimos 90 dias e compara o MTTR de
 -- cada equipamento com a média geral, calculada numa subquery escalar.
 -- ---------------------------------------------------------------------
+-- @consulta mttr-acima-media
 \echo '== 1. Equipamentos com MTTR acima da média (últimos 90 dias) =='
 SELECT k.tag,
        k.nome,
@@ -29,6 +34,7 @@ SELECT k.tag,
 -- Soma as SAÍDAS de estoque por peça e mostra quanto isso custou
 -- e quantas OS diferentes usaram a peça.
 -- ---------------------------------------------------------------------
+-- @consulta top-pecas
 \echo '== 2. Top 5 peças mais consumidas (últimos 30 dias) =='
 SELECT p.codigo,
        p.descricao,
@@ -52,6 +58,7 @@ HAVING SUM(m.qtd) > 0
 -- Conta as OS corretivas fechadas por causa e calcula o % acumulado.
 -- As causas com % acumulado até ~80% são as "poucas vitais" do Pareto.
 -- ---------------------------------------------------------------------
+-- @consulta pareto-causas
 \echo '== 3. Pareto das causas de falha =='
 WITH por_causa AS (
     SELECT os.causa, COUNT(*) AS qtd
