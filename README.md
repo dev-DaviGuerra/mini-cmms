@@ -147,6 +147,7 @@ abra **http://localhost:3000**. No deploy, quem serve os arquivos é o NGINX.
 | `os-detalhe.html?id=N` | detalhe da OS: dados, peças com custo e histórico de auditoria; "Assumir" (TECNICO, OS aberta) e "Fechar" em painel lateral com lista de peças (TECNICO que assumiu ou SUPERVISOR). Falta de estoque: mensagem com peça, pedido e disponível, e a OS vai para "Aguardando peça" |
 | `equipamentos.html` | resumo (total, operando, parados), lista com tag, nome, linha, criticidade, status em semáforo e OS pendentes (o link abre a lista de OS filtrada); busca e filtro; cadastro em painel lateral para SUPERVISOR |
 | `estoque.html` | resumo (peças, abaixo do mínimo, valor em estoque), lista com destaque das peças abaixo do mínimo (que aparecem primeiro); para SUPERVISOR: alertas pendentes e "Entrada de estoque" em painel lateral (`CALL sp_entrada_estoque`) |
+| `dashboard.html` | só indicadores e gráficos (Chart.js local em `vendor/`): situação atual (`/kpis/resumo`); totais do período de 30, 90 ou 180 dias (falhas, MTTR médio, disponibilidade média, custo); MTTR e disponibilidade por equipamento; Pareto de causas; top 5 peças; tabela "MTTR acima da média". Cada bloco indica a técnica SQL usada |
 | `usuarios.html` | só SUPERVISOR (o item do menu aparece só para ele): lista de usuários, cadastro em painel lateral e ativar/desativar |
 | (todas as telas) | "Trocar senha" no rodapé do menu, em painel lateral, para qualquer perfil |
 | `404.html` | página para endereços inexistentes fora de `/api` (dentro de `/api` a resposta é JSON) |

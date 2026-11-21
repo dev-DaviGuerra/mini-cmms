@@ -367,6 +367,36 @@ O Mini-CMMS é um sistema **interno** de uma fábrica, não um serviço público
 
 ---
 
+## Etapa 10 — Dashboard (issue #10)
+
+**O que foi feito**
+
+1. `dashboard.html` tem só indicadores e gráficos:
+   - "Agora" (`/api/kpis/resumo`): cards que levam às telas filtradas;
+   - "No período" (30, 90 ou 180 dias, via `sp_kpis_equipamento`): falhas, MTTR médio ponderado (tempo total de reparo ÷ total de falhas), disponibilidade média e custo de manutenção.
+2. **Gráficos**, com o Chart.js servido localmente em `vendor/` (build UMD, sem `eval`, compatível com a CSP sem `unsafe-inline`):
+   - MTTR por equipamento em barras, com a linha da média;
+   - disponibilidade em **pontos**;
+   - Pareto: barras com a % de cada causa e linha com a % acumulada, no **mesmo eixo** de 0 a 100%, com a linha de corte de 80%;
+   - top 5 peças em barras horizontais;
+   - tabela "MTTR acima da média".
+3. **As cores vêm dos design tokens** do CSS: o JS lê `--grafico-serie-1` e os outros com `getComputedStyle`. A paleta (azul e laranja) foi **validada por script** quanto à separação para daltonismo (ΔE 24,7) e ao contraste (3:1 ou mais). Referências como média e 80% usam tinta neutra tracejada, porque não são uma série.
+4. Cada bloco traz um **rótulo discreto da técnica SQL** ("função sp_kpis_equipamento", "CTE + função de janela", "JOIN + GROUP BY / HAVING", "subquery", "COUNT(*) FILTER"). Os blocos com janela fixa no SQL dizem isso no subtítulo, porque o filtro de período vale só para o que vem da função.
+5. **Acessibilidade:** cada gráfico tem `role="img"` com um resumo em texto e uma **tabela com os mesmos dados** ("Ver dados em tabela"). Os tooltips mostram os detalhes, a animação respeita `prefers-reduced-motion`, e cada bloco carrega e falha de forma independente. **Ajustes no Estoque:** o card "Abaixo do mínimo" (e o de máquinas paradas) e o quadro de alertas ficam neutros com zero e vermelhos só quando há itens.
+
+**Perguntas prováveis**
+
+1. *Por que o Pareto não usa dois eixos (quantidade à esquerda e % à direita), como nos livros?*
+   Gráficos com dois eixos verticais de escalas diferentes enganam: dá para fazer duas séries parecerem correlacionadas, ou uma parecer maior que a outra, só escolhendo as escalas. Por isso as barras mostram a **% de cada causa**, e não a contagem, e a linha mostra a **% acumulada**, as duas na mesma escala de 0 a 100%. A leitura do Pareto (as "poucas vitais" até a linha de 80%) continua igual, e a quantidade de OS aparece no tooltip e na tabela.
+
+2. *Por que a disponibilidade está em pontos e não em barras?*
+   O comprimento de uma barra representa o valor, então ela **precisa começar no zero**. Como todos os equipamentos estão entre 92% e 96%, barras de 0 a 100% ficariam praticamente iguais, e cortar o eixo em 90% exageraria as diferenças. Com pontos, o que importa é a **posição**, então o eixo pode começar perto dos valores (o subtítulo diz onde ele começa) sem distorcer a leitura.
+
+3. *O filtro de período muda todos os gráficos?*
+   Não, e a tela deixa isso explícito. O período é passado para a função `sp_kpis_equipamento(inicio, fim)`, que alimenta os totais e os gráficos de MTTR e disponibilidade. As consultas BD2 (Pareto, top 5 peças, MTTR acima da média) são o **mesmo SQL** do arquivo `04_consultas_bd2.sql`, com janelas fixas (todas as OS, 30 dias, 90 dias), e cada bloco informa a sua janela no subtítulo. Parametrizar essas consultas é possível, mas mudaria o SQL entregue para a disciplina de BD2.
+
+---
+
 ## Segurança (QSS)
 
 Registro das correções e dos controles de segurança, para o relatório do QSS.

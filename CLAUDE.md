@@ -27,6 +27,10 @@ Referência completa: `Mini-CMMS_Projeto_AVD2.pdf` (local, fora do git).
 - Telas: login, lista de OS, detalhe/fechamento da OS, usuários (SUPERVISOR), dashboard.
 - Escopo ampliado a pedido do usuário: telas de Equipamentos e Estoque (#26). A entrada de
   estoque fica na tela de Estoque, e o dashboard (#10) só tem indicadores e gráficos.
+- Gráficos (dashboard): Chart.js UMD local em `frontend/vendor/` (copiado por `npm run vendor`).
+  As cores são lidas dos tokens `--grafico-*`. Nunca usar eixo duplo; barras começam no zero
+  (eixo cortado só com pontos); referências em tinta neutra tracejada; tabela de dados sob cada
+  gráfico.
 
 Fora do escopo (só se o usuário pedir): cancelamento de OS, entrada de nota, cadastro aberto
 (autocadastro) de usuários, deploy, SonarCloud, artigo, slides.
