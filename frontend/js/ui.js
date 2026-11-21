@@ -192,8 +192,8 @@ const GRUPOS_MENU = [
     titulo: 'Operação',
     itens: [
       { id: 'os', href: 'os.html', texto: 'Ordens de serviço' },
-      { id: 'equipamentos', texto: 'Equipamentos' },
-      { id: 'estoque', texto: 'Estoque' },
+      { id: 'equipamentos', href: 'equipamentos.html', texto: 'Equipamentos' },
+      { id: 'estoque', href: 'estoque.html', texto: 'Estoque' },
       { id: 'dashboard', texto: 'Dashboard' },
     ],
   },

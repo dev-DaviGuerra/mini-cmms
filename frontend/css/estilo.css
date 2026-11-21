@@ -541,6 +541,7 @@ button.indicador:hover { background: var(--cinza-50); }
   flex-direction: column;
   gap: var(--esp-2);
   max-width: 380px;
+  pointer-events: none; /* só informa: não pode bloquear cliques nos botões que ficam embaixo */
 }
 .aviso {
   padding: var(--esp-3) var(--esp-4);
@@ -711,6 +712,70 @@ body.drawer-aberto { overflow: hidden; }
 .campo [aria-invalid="true"] { border-color: var(--perigo); }
 
 /* =====================================================================
+   Equipamentos e Estoque
+   ===================================================================== */
+.indicadores.indicadores-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.indicador-valor-moeda { font-size: var(--texto-xl); }
+.indicador.operando { --cor-indicador: var(--sucesso); }
+
+.status.operando { --cor-status: var(--sucesso); }
+.status.parado { --cor-status: var(--critico); }
+
+.criticidade { font-size: var(--texto-sm); white-space: nowrap; }
+.criticidade-a { font-weight: 700; color: var(--critico); }
+.criticidade-b { font-weight: 600; color: var(--grafite-700); }
+.criticidade-c { color: var(--texto-suave); }
+
+.link-pendentes { font-weight: 600; color: var(--critico); }
+.tabela tr.equip-parado { --barra-prioridade: var(--critico); }
+.tabela tr.abaixo-minimo { --barra-prioridade: var(--critico); background: var(--critico-suave); }
+.tabela tr.abaixo-minimo:hover { background: color-mix(in srgb, var(--critico-suave) 70%, var(--destaque-suave)); }
+.tabela tr.abaixo-minimo .valor-estoque { color: var(--critico); font-weight: 700; }
+.col-acao { width: 1%; }
+
+.campo-marcar { flex-direction: row; align-items: center; gap: var(--esp-2); min-height: 36px; }
+.campo-marcar input { width: 18px; height: 18px; min-height: 0; accent-color: var(--grafite-900); }
+.campo-marcar label { font-weight: 500; color: var(--texto); }
+
+/* alertas pendentes */
+.painel-alertas { margin-bottom: var(--esp-4); border-left: 4px solid var(--critico); }
+.titulo-secao {
+  font-size: var(--texto-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--critico);
+}
+.lista-alertas { list-style: none; margin: 0; padding: 0; }
+.lista-alertas li {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr) auto auto auto;
+  gap: var(--esp-3);
+  align-items: center;
+  padding: var(--esp-2) var(--esp-4);
+  border-bottom: 1px solid var(--cinza-100);
+}
+.lista-alertas li:last-child { border-bottom: 0; }
+.lista-alertas .status { font-family: var(--fonte-mono); font-weight: 600; }
+.alerta-descricao { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.alerta-numeros { font-size: var(--texto-sm); color: var(--critico); font-weight: 600; }
+.alerta-quando { font-size: var(--texto-xs); color: var(--texto-suave); }
+.lista-alertas .sem-alertas { display: block; color: var(--texto-suave); font-size: var(--texto-md); }
+
+/* situação da peça no drawer de entrada */
+.situacao-peca {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--esp-3);
+  border-radius: var(--raio);
+  border: 1px solid var(--borda);
+  background: var(--cinza-50);
+  font-size: var(--texto-sm);
+}
+.situacao-peca.abaixo { border-color: var(--critico); background: var(--critico-suave); }
+
+/* =====================================================================
    Login (tela dividida)
    ===================================================================== */
 .pagina-login {
@@ -823,8 +888,10 @@ body.drawer-aberto { overflow: hidden; }
 }
 @media (max-width: 960px) {
   :root { --largura-menu: 200px; }
-  .indicadores { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .indicadores, .indicadores.indicadores-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .col-descricao { display: none; }
+  .lista-alertas li { grid-template-columns: 110px minmax(0, 1fr) auto; }
+  .alerta-quando { display: none; }
   .pagina-login { grid-template-columns: 1fr; }
   .login-marca { padding: var(--esp-5); min-height: 0; }
   .login-chamada h1 { font-size: var(--texto-2xl); }
