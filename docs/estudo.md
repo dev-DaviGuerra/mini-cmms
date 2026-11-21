@@ -79,3 +79,49 @@ Por isso os KPIs ficaram em FUNCTION (precisam devolver uma tabela consultável 
 
 3. *Qual a diferença entre 401 e 403, e por que bcrypt em vez de SHA-256?*
    401 significa "não sei quem você é" (token ausente, inválido ou expirado). 403 significa "sei quem você é, mas seu perfil não pode fazer isso". O bcrypt é lento de propósito (custo 10, cerca de 2¹⁰ rodadas) e gera um *salt* aleatório por senha. Se o banco vazar, isso torna a força bruta e as *rainbow tables* inviáveis. O SHA-256 é rápido demais e, sem salt, senhas iguais teriam o mesmo hash.
+
+---
+
+## Ajustes de infraestrutura antes da #3 (Neon, testes e proxy)
+
+**O que foi feito**
+
+1. **Banco no Neon com SSL:** o driver `pg` passa a usar `ssl: { rejectUnauthorized: true }` sempre que o host não é local. A conexão é criptografada (TLS 1.3) **e** o certificado do servidor é verificado, o que evita um ataque *man-in-the-middle*. Os scripts SQL rodaram sem nenhuma mudança no Neon (PG 19), o que mostra que são portáveis.
+2. **`npm test` isolado no `cmms_test`:** o script roda com `NODE_ENV=test` (via `cross-env`, para funcionar também no Windows). O `config.js` troca para `DATABASE_URL_TEST` e aborta se ele for igual ao banco de desenvolvimento. Os testes apagam o que criam, e o `cmms` nunca é tocado.
+3. **`app.set('trust proxy', 1)`:** no deploy, toda requisição chega à API vinda do NGINX. Sem essa linha, o Express enxerga o IP do NGINX para todos os clientes, e o rate limit bloquearia todo mundo junto depois de 10 logins. Com ela, o Express usa o IP real do cabeçalho `X-Forwarded-For`, confiando em **1** salto de proxy.
+4. **`jwt.verify` com `{ algorithms: ['HS256'] }`:** isso já estava no `middlewares/auth.js` desde a #2. Foi conferido, e há teste com token adulterado e expirado.
+5. A API sobe localmente apontando para o `cmms` no Neon, e os testes passam no `cmms_test`.
+
+**Perguntas prováveis**
+
+1. *Por que não rodar os testes no mesmo banco de desenvolvimento?*
+   Os testes inserem e apagam dados. Se um teste falhar no meio, pode deixar lixo ou apagar algo, e o banco da demo ficaria inconsistente. Além disso, os testes de "nada mudou no banco" contam linhas, e alguém mexendo na API ao mesmo tempo atrapalharia essas contagens. Com bancos separados, cada ambiente tem dados previsíveis.
+
+2. *Por que `trust proxy` é `1` e não `true`?*
+   Com `true`, o Express confia em **todo** o `X-Forwarded-For`, e o cliente pode enviar esse cabeçalho forjado com um IP qualquer. Bastaria trocar o IP a cada tentativa para burlar o rate limit. Com `1`, o Express só aceita o IP que o NGINX (o único proxy confiável) acrescentou.
+
+3. *O que o `rejectUnauthorized: true` acrescenta, se a conexão já é criptografada?*
+   A criptografia sozinha garante que ninguém leia o tráfego, mas não garante **com quem** a API está falando. Sem verificar o certificado, um atacante na rede poderia se passar pelo banco e capturar a senha. Verificar o certificado (assinado por uma autoridade confiável, com o nome do host batendo) garante que a API está falando com o Neon de verdade.
+
+---
+
+## Etapa 3 — Abrir OS (issue #3)
+
+**O que foi feito**
+
+1. `POST /api/os` (OPERADOR ou SUPERVISOR) valida equipamento, descrição, tipo e prioridade, e devolve 400 com **todos** os problemas de uma vez. Na mesma transação, insere a OS como `ABERTA` e coloca o equipamento em `PARADO`.
+2. A transação usa o helper `transacao(usuarioId, fn)` de `db.js`, que já grava `app.usuario_id` com `set_config(..., true)`. Ele vai ser reaproveitado para assumir e fechar a OS.
+3. O equipamento é lido com `SELECT ... FOR UPDATE`. Equipamento inexistente dá 404, e um ROLLBACK garante que nenhuma OS seja criada.
+4. Também entraram `GET /api/os`, com filtros por status, prioridade e equipamento (o SQL é montado só com parâmetros `$n`), e `GET /api/os/:id`, com peças e histórico de auditoria. As telas de lista e detalhe vão precisar delas.
+5. São 9 testes novos: 201 com o equipamento PARADO, supervisor também abre, 403 do técnico sem gravar nada, 401, 400, 404 sem criar OS, listas com filtro, detalhe e id inválido.
+
+**Perguntas prováveis**
+
+1. *Por que abrir a OS e parar o equipamento numa transação, se são só dois comandos?*
+   Porque precisam acontecer juntos. Se o INSERT funcionasse e o UPDATE falhasse (queda de conexão, por exemplo), teríamos uma OS aberta com o equipamento ainda "OPERANDO". Os KPIs e o painel mostrariam um estado impossível. Com a transação, ou os dois acontecem ou nenhum.
+
+2. *O filtro da listagem monta o SQL dinamicamente. Isso não abre brecha para SQL injection?*
+   Não. O que muda no texto do SQL são só trechos fixos escritos no código (`os.status = $1`). Os **valores** vindos da URL vão sempre como parâmetros, e o PostgreSQL os trata como dados, nunca como código. Além disso, os filtros são validados antes: o status precisa estar na lista de status válidos e o `equipamentoId` precisa ser inteiro.
+
+3. *Para que serve o `FOR UPDATE` no equipamento?*
+   Ele trava a linha do equipamento até o fim da transação. Se dois operadores abrirem OS para o mesmo equipamento ao mesmo tempo, a segunda transação espera a primeira terminar. Assim as duas não leem e atualizam o equipamento simultaneamente. Esse controle de concorrência é ainda mais importante no fechamento da OS, com a baixa de estoque.

@@ -34,6 +34,17 @@ deploy, SonarCloud, artigo, slides.
 4. Ao terminar cada etapa, adicionar em `docs/estudo.md`: explicação de 5 linhas do que foi feito
    + 3 perguntas que um professor poderia fazer, com as respostas.
 5. Nunca commitar `.env`. Manter `.env.example` sem segredos reais.
+6. **Nunca sobrescrever o `backend/.env`.** Proibido rodar `cp`, `mv`, redirecionamento `>`,
+   `writeFileSync`, Write/Edit ou qualquer comando que substitua esse arquivo. Para alterá-lo,
+   **só acrescentar linhas no fim** (`>>` ou `fs.appendFileSync`). O dotenv usa a última
+   ocorrência de uma chave, então acrescentar basta para trocar um valor. Nunca exibir os valores
+   do `.env`.
+   *Motivo:* em 21/11 um comando sobrescreveu o `.env` com o `.env.example` e as credenciais do
+   Neon tiveram de ser trocadas.
+7. Para gerar arquivos com texto que contenha crases (Markdown), usar a ferramenta Write ou um
+   heredoc com delimitador entre aspas simples (`<<'EOF'`). Nunca usar texto com crases dentro de
+   aspas duplas no shell: o bash executa o conteúdo das crases como comando. Foi assim que o
+   `.env` foi sobrescrito.
 
 ## Decisões de negócio (seção 6.2 do PDF)
 - Prioridades: BAIXA / MEDIA / ALTA / EMERGENCIA.
@@ -48,10 +59,35 @@ deploy, SonarCloud, artigo, slides.
   (`SET LOCAL` não aceita parâmetro `$1`; use `SELECT set_config('app.usuario_id', $1, true)`.)
 - Todos os dados são fictícios (repositório público).
 
+## Banco de dados: Neon
+- O banco é o **Neon** (PostgreSQL gerenciado, PG 19), com dois bancos:
+  - `cmms` (`DATABASE_URL`): usado pela API e pelo seed;
+  - `cmms_test` (`DATABASE_URL_TEST`): usado só pelo `npm test`.
+- **Nunca exibir as connection strings** (contêm usuário e senha). Para usá-las num comando,
+  leia-as do `.env` sem imprimir.
+- Os scripts SQL são **portáveis**: só PostgreSQL padrão, sem recurso exclusivo do Neon. Devem
+  continuar rodando também em PostgreSQL local 14+ e na VM da Azure (deploy).
+- Banco remoto => `ssl: { rejectUnauthorized: true }`. A regra fica em `configConexao()`
+  (`backend/src/db.js` e `database/seed.js`). Os parâmetros `sslmode`/`channel_binding` da URL
+  são removidos para o driver `pg`.
+- `npm test` usa `NODE_ENV=test` (via cross-env). O `config.js` troca para `DATABASE_URL_TEST`
+  e falha se ele for igual ao `DATABASE_URL`. Os testes nunca tocam o banco de desenvolvimento.
+
+## Convenções da API
+- Camadas: `routes` (valida a entrada) → `services` (regra de negócio) → `db`.
+- Escrita com mais de um passo usa `transacao(usuarioId, fn)` de `db.js`. Ela já faz
+  `BEGIN`, `set_config('app.usuario_id', ...)`, `COMMIT`/`ROLLBACK`.
+- Erros: lançar as classes de `src/errors.js`; o middleware `erros.js` formata a resposta.
+- `app.set('trust proxy', 1)`: a API roda atrás de 1 proxy (NGINX) no deploy.
+- Testes em `backend/tests/*.test.js`. Cada arquivo cria e remove os próprios dados
+  (`tests/helpers.js`).
+
 ## Comandos
 ```bash
-# aplicar o banco (psql do PostgreSQL local)
-psql "$DATABASE_URL" -f database/01_schema.sql -f database/02_triggers.sql -f database/03_procedures.sql
+# aplicar o banco (URLs lidas do backend/.env; sempre entre aspas por causa do &)
+psql "$DATABASE_URL"      -f database/01_schema.sql -f database/02_triggers.sql -f database/03_procedures.sql
+psql "$DATABASE_URL_TEST" -f database/01_schema.sql -f database/02_triggers.sql -f database/03_procedures.sql
 cd database && npm install && npm run seed
 psql "$DATABASE_URL" -f database/04_consultas_bd2.sql
+cd backend && npm test && npm start
 ```

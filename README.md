@@ -7,39 +7,54 @@ estoque numa transação atômica e acompanhar indicadores de manutenção (MTTR
 disponibilidade e custo). **Todos os dados são fictícios**, gerados pelo `database/seed.js`.
 
 ## Stack
-- **Banco:** PostgreSQL (tabelas, triggers, função de KPIs, consultas BD2)
+- **Banco:** PostgreSQL no [Neon](https://neon.tech) (tabelas, triggers, função de KPIs, procedure, consultas BD2)
 - **API:** Node.js 20 + Express (ES Modules), JWT, bcrypt, helmet, express-rate-limit
 - **Front:** HTML + JavaScript vanilla + Chart.js
 
 ## Estrutura
 ```
-backend/     API Express (src/routes, src/middlewares, src/services)
+backend/     API Express (src/routes, src/middlewares, src/services) e tests/
 frontend/    telas HTML + js/ + css/
 database/    01_schema.sql, 02_triggers.sql, 03_procedures.sql, 04_consultas_bd2.sql, seed.js
 docs/        estudo.md (resumo de cada etapa + perguntas de banca)
 ```
 
-## Como rodar o banco localmente
+## Banco de dados
 
-Pré-requisitos: PostgreSQL 14+ e Node.js 20.
+O banco de desenvolvimento é o **Neon** (PostgreSQL gerenciado), com dois bancos:
+
+| Banco | Variável no `backend/.env` | Uso |
+|---|---|---|
+| `cmms` | `DATABASE_URL` | API e seed |
+| `cmms_test` | `DATABASE_URL_TEST` | só `npm test` (os testes criam e apagam dados) |
+
+Os scripts SQL são **portáveis**. Usam só PostgreSQL padrão (PL/pgSQL, `TIMESTAMPTZ`, CTEs,
+funções de janela), sem nenhum recurso exclusivo do Neon, e rodam igual em vários ambientes:
+- PostgreSQL 14 ou mais novo, local;
+- Neon (testado no PostgreSQL 19);
+- VM da Azure (testado no PostgreSQL 18).
+
+A conexão da API e do seed usa SSL com verificação de certificado sempre que o host não é
+`localhost`.
+
+Pré-requisitos: Node.js 20 e o `psql` (vem com o PostgreSQL).
 
 ```bash
-# 1. criar o banco
-createdb -U postgres cmms
+# 1. configurar variáveis (DATABASE_URL, DATABASE_URL_TEST, JWT_SECRET, SEED_PASSWORD)
+cp backend/.env.example backend/.env
 
-# 2. configurar variáveis
-cp backend/.env.example backend/.env   # edite DATABASE_URL com sua senha
+# 2. criar tabelas, triggers, função de KPIs e procedure, nos DOIS bancos
+psql "$DATABASE_URL"      -f database/01_schema.sql -f database/02_triggers.sql -f database/03_procedures.sql
+psql "$DATABASE_URL_TEST" -f database/01_schema.sql -f database/02_triggers.sql -f database/03_procedures.sql
 
-# 3. criar tabelas, triggers e função de KPIs
-psql "postgres://postgres:SENHA@localhost:5432/cmms" \
-  -f database/01_schema.sql -f database/02_triggers.sql -f database/03_procedures.sql
-
-# 4. popular com dados fictícios
+# 3. popular o banco de desenvolvimento com dados fictícios
 cd database && npm install && npm run seed
 
-# 5. rodar as consultas BD2
-psql "postgres://postgres:SENHA@localhost:5432/cmms" -f database/04_consultas_bd2.sql
+# 4. rodar as consultas BD2
+psql "$DATABASE_URL" -f database/04_consultas_bd2.sql
 ```
+
+> As URLs do Neon contêm `&`. No terminal, use-as sempre entre aspas.
 
 Usuários criados pelo seed (senha = `SEED_PASSWORD` do `.env`):
 
@@ -56,12 +71,14 @@ Usuários criados pelo seed (senha = `SEED_PASSWORD` do `.env`):
 cd backend
 npm install
 npm start          # http://localhost:3000  (npm run dev reinicia ao salvar)
-npm test           # node:test + supertest; usa o banco do DATABASE_URL
+npm test           # node:test + supertest; usa SEMPRE o DATABASE_URL_TEST (cmms_test)
 ```
 
 O `JWT_SECRET` do `backend/.env` precisa ter pelo menos 32 caracteres; a API não sobe sem ele.
-Os testes criam e apagam os próprios usuários (prefixo `teste-`); só exigem os scripts
-`01..03` aplicados.
+
+O `npm test` roda com `NODE_ENV=test`. Nesse modo, a API se recusa a usar o banco de
+desenvolvimento. Os testes criam e apagam os próprios usuários, equipamentos e OS; o
+`cmms_test` só precisa dos scripts `01..03`.
 
 ### Endpoints
 
@@ -70,10 +87,19 @@ Os testes criam e apagam os próprios usuários (prefixo `teste-`); só exigem o
 | GET | `/api/health` | público | verificação de vida |
 | POST | `/api/auth/login` | público | `{ email, senha }` → `{ token, expiraEm, usuario }` (10 tentativas/15 min) |
 | GET | `/api/auth/me` | qualquer logado | dados do usuário do token |
+| POST | `/api/os` | OPERADOR, SUPERVISOR | abre OS: `{ equipamentoId, descricao, tipo?, prioridade? }` → 201; o equipamento passa a PARADO |
+| GET | `/api/os` | qualquer logado | lista; filtros `status`, `prioridade`, `equipamentoId`, `limite` (máx. 200) |
+| GET | `/api/os/:id` | qualquer logado | detalhe com peças usadas e histórico de auditoria |
 
-Erros seguem sempre o formato `{ "erro": { "codigo", "mensagem", "detalhes" } }`:
-400 validação · 401 sem token/token inválido · 403 perfil sem permissão · 404 não encontrado ·
-409 estoque insuficiente ou status inválido.
+Toda resposta de erro tem o formato `{ "erro": { "codigo", "mensagem", "detalhes" } }`:
+
+| Status | Quando |
+|---|---|
+| 400 | dados inválidos |
+| 401 | sem token ou token inválido |
+| 403 | perfil sem permissão |
+| 404 | não encontrado |
+| 409 | estoque insuficiente ou status inválido |
 
 ## Fluxo de trabalho
 - Uma issue por funcionalidade, board no GitHub Projects (To Do / In Progress / Done).
