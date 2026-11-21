@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ordens de serviço · Mini-CMMS</title>
+  <link rel="stylesheet" href="css/estilo.css">
+  <script type="module" src="js/os-lista.js"></script>
+</head>
+<body>
+  <header id="cabecalho" class="cabecalho"></header>
+
+  <main class="conteudo">
+    <div class="titulo-pagina">
+      <h1>Ordens de serviço</h1>
+      <button id="botao-nova" type="button" class="botao primario" hidden>+ Nova OS</button>
+    </div>
+
+    <div id="mensagem" role="status" hidden></div>
+
+    <!-- Abrir OS: só aparece para OPERADOR e SUPERVISOR (a API também valida o perfil) -->
+    <section id="secao-nova" class="painel" hidden aria-labelledby="titulo-nova">
+      <h2 id="titulo-nova">Abrir ordem de serviço</h2>
+      <form id="form-nova" class="grade-form" novalidate>
+        <div class="campo">
+          <label for="nova-equipamento">Equipamento</label>
+          <select id="nova-equipamento" name="equipamentoId" required>
+            <option value="">Selecione…</option>
+          </select>
+        </div>
+        <div class="campo">
+          <label for="nova-tipo">Tipo</label>
+          <select id="nova-tipo" name="tipo"></select>
+        </div>
+        <div class="campo">
+          <label for="nova-prioridade">Prioridade</label>
+          <select id="nova-prioridade" name="prioridade"></select>
+        </div>
+        <div class="campo largo">
+          <label for="nova-descricao">Descrição da falha</label>
+          <textarea id="nova-descricao" name="descricao" rows="3" maxlength="1000" required
+                    placeholder="Ex.: Robô parou com alarme de sobrecorrente no eixo 3"></textarea>
+        </div>
+        <div class="acoes largo">
+          <button type="button" id="botao-cancelar-nova" class="botao secundario">Cancelar</button>
+          <button type="submit" class="botao primario">Abrir OS</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="painel" aria-label="Lista de ordens de serviço">
+      <form id="filtros" class="filtros" novalidate>
+        <div class="campo">
+          <label for="filtro-status">Status</label>
+          <select id="filtro-status" name="status"><option value="">Todos</option></select>
+        </div>
+        <div class="campo">
+          <label for="filtro-prioridade">Prioridade</label>
+          <select id="filtro-prioridade" name="prioridade"><option value="">Todas</option></select>
+        </div>
+        <div class="campo">
+          <label for="filtro-equipamento">Equipamento</label>
+          <select id="filtro-equipamento" name="equipamentoId"><option value="">Todos</option></select>
+        </div>
+        <div class="campo acoes-filtro">
+          <button type="button" id="botao-limpar" class="botao secundario">Limpar filtros</button>
+          <button type="button" id="botao-atualizar" class="botao secundario">Atualizar</button>
+        </div>
+      </form>
+
+      <div class="tabela-rolagem">
+        <table class="tabela">
+          <thead>
+            <tr>
+              <th scope="col">OS</th>
+              <th scope="col">Equipamento</th>
+              <th scope="col">Tipo</th>
+              <th scope="col">Prioridade</th>
+              <th scope="col">Status</th>
+              <th scope="col">Aberta em</th>
+              <th scope="col">Técnico</th>
+            </tr>
+          </thead>
+          <tbody id="linhas"></tbody>
+        </table>
+      </div>
+
+      <div class="paginacao">
+        <span id="info-paginacao" aria-live="polite"></span>
+        <div>
+          <button type="button" id="botao-anterior" class="botao secundario">‹ Anterior</button>
+          <button type="button" id="botao-proxima" class="botao secundario">Próxima ›</button>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
