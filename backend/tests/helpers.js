@@ -47,17 +47,35 @@ export async function criarEquipamento() {
   return rows[0];
 }
 
+let contadorPecas = 0;
+export async function criarPeca({ estoque, estoqueMin = 0, custoUnit = 10 }) {
+  contadorPecas += 1;
+  const { rows } = await pool.query(
+    `INSERT INTO pecas (codigo, descricao, estoque, estoque_min, custo_unit)
+     VALUES ($1, 'Peça de teste', $2, $3, $4) RETURNING id, codigo, estoque, estoque_min, custo_unit`,
+    [`TP${contadorPecas}-${process.pid}`.slice(0, 20), estoque, estoqueMin, custoUnit],
+  );
+  return rows[0];
+}
+
 // Apaga tudo o que os testes criaram, respeitando as chaves estrangeiras:
-// movimentações -> OS (os_pecas e os_auditoria caem em cascata) -> equipamentos -> usuários.
-export async function removerDados({ usuarios = {}, equipamentos = [] }) {
+// movimentações e alertas -> OS (os_pecas e os_auditoria caem em cascata) -> peças,
+// equipamentos -> usuários.
+export async function removerDados({ usuarios = {}, equipamentos = [], pecas = [] }) {
   const idsUsuarios = Object.values(usuarios).map((u) => u.id);
   const idsEquip = equipamentos.map((e) => e.id);
-  await pool.query('DELETE FROM movimentacoes WHERE usuario_id = ANY($1::int[])', [idsUsuarios]);
+  const idsPecas = pecas.map((p) => p.id);
+  await pool.query(
+    'DELETE FROM movimentacoes WHERE usuario_id = ANY($1::int[]) OR peca_id = ANY($2::int[])',
+    [idsUsuarios, idsPecas],
+  );
+  await pool.query('DELETE FROM alertas_estoque WHERE peca_id = ANY($1::int[])', [idsPecas]);
   await pool.query(
     `DELETE FROM ordens_servico
       WHERE equipamento_id = ANY($1::int[]) OR aberta_por = ANY($2::int[]) OR tecnico_id = ANY($2::int[])`,
     [idsEquip, idsUsuarios],
   );
+  await pool.query('DELETE FROM pecas WHERE id = ANY($1::int[])', [idsPecas]);
   await pool.query('DELETE FROM equipamentos WHERE id = ANY($1::int[])', [idsEquip]);
   await pool.query('DELETE FROM usuarios WHERE id = ANY($1::int[])', [idsUsuarios]);
 }
