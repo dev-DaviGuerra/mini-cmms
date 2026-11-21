@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Usuários · Mini-CMMS</title>
+  <link rel="icon" href="img/logo.svg" type="image/svg+xml">
+  <link rel="preload" href="fontes/ibm-plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="css/estilo.css">
+  <script type="module" src="js/usuarios.js"></script>
+</head>
+<body class="app">
+  <aside id="menu" class="menu-lateral" aria-label="Menu principal"></aside>
+
+  <main class="conteudo">
+    <header class="cabecalho-pagina">
+      <h1>Usuários</h1>
+      <button id="botao-novo" type="button" class="botao primario" hidden
+              aria-haspopup="dialog" aria-controls="drawer-usuario">+ Novo usuário</button>
+    </header>
+
+    <div id="mensagem" role="status" hidden></div>
+
+    <!-- só SUPERVISOR; outros perfis veem este aviso (e a API responde 403) -->
+    <div id="restrito" class="painel" hidden></div>
+
+    <section id="secao-lista" class="painel" aria-labelledby="titulo-lista" hidden>
+      <h2 id="titulo-lista" class="so-leitor-de-tela">Lista de usuários</h2>
+      <p class="nota-painel">
+        Usuários não são apagados: as OS e o histórico de auditoria guardam quem fez cada ação.
+        Quem sai da equipe é <strong>desativado</strong> e perde o acesso na hora.
+      </p>
+      <div class="tabela-rolagem">
+        <table class="tabela tabela-simples">
+          <thead>
+            <tr>
+              <th scope="col">Nome</th>
+              <th scope="col">E-mail</th>
+              <th scope="col">Perfil</th>
+              <th scope="col">Situação</th>
+              <th scope="col" class="numero">Ação</th>
+            </tr>
+          </thead>
+          <tbody id="linhas"></tbody>
+        </table>
+      </div>
+      <div class="rodape-tabela">
+        <span id="contagem" aria-live="polite"></span>
+      </div>
+    </section>
+  </main>
+
+  <!-- Drawer "Novo usuário" -->
+  <aside id="drawer-usuario" class="drawer" role="dialog" aria-modal="true" aria-labelledby="titulo-usuario" inert>
+    <form id="form-usuario" class="drawer-form" novalidate>
+      <div class="drawer-cabecalho">
+        <h2 id="titulo-usuario">Novo usuário</h2>
+        <button type="button" class="botao secundario icone" data-fechar-drawer aria-label="Fechar painel">×</button>
+      </div>
+      <div class="drawer-corpo">
+        <div id="mensagem-usuario" role="alert" hidden></div>
+        <div class="campo">
+          <label for="usuario-nome">Nome</label>
+          <input id="usuario-nome" name="nome" maxlength="100" autocomplete="off" required>
+        </div>
+        <div class="campo">
+          <label for="usuario-email">E-mail</label>
+          <input id="usuario-email" name="email" type="email" maxlength="150" autocomplete="off" required>
+        </div>
+        <div class="campo">
+          <label for="usuario-perfil">Perfil</label>
+          <select id="usuario-perfil" name="perfil" required>
+            <option value="">Selecione…</option>
+          </select>
+          <span class="ajuda">Operador abre OS · Técnico assume e fecha · Supervisor gerencia cadastros, estoque e usuários.</span>
+        </div>
+        <div class="campo">
+          <label for="usuario-senha">Senha inicial</label>
+          <input id="usuario-senha" name="senha" type="password" maxlength="72" autocomplete="new-password" required>
+        </div>
+        <div class="campo">
+          <label for="usuario-confirmacao">Confirme a senha</label>
+          <input id="usuario-confirmacao" name="confirmacao" type="password" maxlength="72" autocomplete="new-password" required>
+          <span id="politica-senha" class="ajuda"></span>
+        </div>
+      </div>
+      <div class="drawer-rodape">
+        <button type="button" class="botao secundario" data-fechar-drawer>Cancelar</button>
+        <button type="submit" class="botao primario">Cadastrar</button>
+      </div>
+    </form>
+  </aside>
+  <div id="fundo-drawer" class="fundo-drawer"></div>
+</body>
+</html>
