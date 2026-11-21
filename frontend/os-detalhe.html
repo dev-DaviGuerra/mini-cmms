@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ordem de serviço · Mini-CMMS</title>
+  <link rel="icon" href="img/logo.svg" type="image/svg+xml">
+  <link rel="preload" href="fontes/ibm-plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fontes/ibm-plex-mono-600.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="css/estilo.css">
+  <script type="module" src="js/os-detalhe.js"></script>
+</head>
+<body class="app">
+  <aside id="menu" class="menu-lateral" aria-label="Menu principal"></aside>
+
+  <main class="conteudo">
+    <nav class="trilha" aria-label="Você está em">
+      <a href="os.html">Ordens de serviço</a>
+      <span aria-hidden="true">/</span>
+      <span id="trilha-atual" aria-current="page">OS</span>
+    </nav>
+
+    <div id="mensagem" role="status" hidden></div>
+
+    <!-- carregando -->
+    <div id="carregando" class="painel secao" aria-busy="true" aria-label="Carregando a OS">
+      <span class="skeleton longo"></span><br>
+      <span class="skeleton medio"></span><br>
+      <span class="skeleton longo"></span>
+    </div>
+
+    <!-- OS inexistente ou id inválido -->
+    <div id="nao-encontrada" class="painel" hidden></div>
+
+    <div id="detalhe" hidden>
+      <header class="cabecalho-pagina cabecalho-os">
+        <div>
+          <h1><span id="os-numero" class="mono"></span> <span id="os-equipamento" class="titulo-equip"></span></h1>
+          <div id="os-meta" class="linha-meta"></div>
+        </div>
+        <div class="acoes-os">
+          <span id="dica-acao" class="dica-acao" hidden></span>
+          <button id="botao-assumir" type="button" class="botao primario" hidden>Assumir OS</button>
+          <button id="botao-fechar" type="button" class="botao primario" hidden
+                  aria-haspopup="dialog" aria-controls="drawer-fechar">Fechar OS</button>
+        </div>
+      </header>
+
+      <div class="grade-detalhe">
+        <div class="coluna-principal">
+          <section class="painel secao" aria-labelledby="titulo-falha">
+            <h2 id="titulo-falha">Falha relatada</h2>
+            <p id="os-descricao" class="texto-descricao"></p>
+            <dl id="os-dados" class="dados"></dl>
+          </section>
+
+          <section id="secao-fechamento" class="painel secao" aria-labelledby="titulo-fechamento" hidden>
+            <h2 id="titulo-fechamento">Fechamento</h2>
+            <dl id="os-fechamento" class="dados"></dl>
+          </section>
+
+          <section class="painel secao" aria-labelledby="titulo-pecas">
+            <h2 id="titulo-pecas">Peças utilizadas</h2>
+            <div id="os-pecas"></div>
+          </section>
+        </div>
+
+        <aside class="coluna-lateral" aria-labelledby="titulo-historico">
+          <section class="painel secao">
+            <h2 id="titulo-historico">Histórico</h2>
+            <ol id="os-historico" class="linha-tempo"></ol>
+          </section>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <!-- Drawer "Fechar OS": TECNICO que assumiu ou SUPERVISOR (a API também valida) -->
+  <aside id="drawer-fechar" class="drawer drawer-largo" role="dialog" aria-modal="true" aria-labelledby="titulo-fechar" inert>
+    <form id="form-fechar" class="drawer-form" novalidate>
+      <div class="drawer-cabecalho">
+        <h2 id="titulo-fechar">Fechar ordem de serviço</h2>
+        <button type="button" class="botao secundario icone" data-fechar-drawer aria-label="Fechar painel">×</button>
+      </div>
+      <div class="drawer-corpo">
+        <div id="mensagem-fechar" role="alert" hidden></div>
+
+        <div class="campo">
+          <label for="fechar-causa">Causa da falha</label>
+          <input id="fechar-causa" name="causa" list="causas-comuns" maxlength="100" autocomplete="off" required>
+          <datalist id="causas-comuns">
+            <option value="Desgaste de rolamento"></option>
+            <option value="Falha elétrica"></option>
+            <option value="Vazamento hidráulico"></option>
+            <option value="Sensor com defeito"></option>
+            <option value="Correia rompida"></option>
+            <option value="Superaquecimento"></option>
+            <option value="Lubrificação insuficiente"></option>
+            <option value="Desalinhamento"></option>
+            <option value="Erro de operação"></option>
+          </datalist>
+        </div>
+
+        <div class="campo">
+          <label for="fechar-solucao">Solução aplicada</label>
+          <textarea id="fechar-solucao" name="solucao" rows="3" maxlength="2000" required></textarea>
+        </div>
+
+        <div class="campo campo-curto">
+          <label for="fechar-horas">Horas trabalhadas</label>
+          <input id="fechar-horas" name="horas" type="number" min="0.1" max="999" step="0.5" inputmode="decimal" required>
+        </div>
+
+        <fieldset class="grupo-pecas">
+          <legend>Peças utilizadas</legend>
+          <p class="ajuda">Cada peça é baixada do estoque ao fechar. Se faltar alguma, nada é gravado.</p>
+          <div id="lista-pecas" class="lista-pecas"></div>
+          <button type="button" id="botao-add-peca" class="botao secundario">+ Adicionar peça</button>
+        </fieldset>
+      </div>
+      <div class="drawer-rodape">
+        <button type="button" class="botao secundario" data-fechar-drawer>Cancelar</button>
+        <button type="submit" id="botao-confirmar-fechar" class="botao primario">Fechar OS</button>
+      </div>
+    </form>
+  </aside>
+  <div id="fundo-drawer" class="fundo-drawer"></div>
+</body>
+</html>
