@@ -121,17 +121,37 @@ describe('GET /api/kpis/resumo', () => {
 });
 
 describe('consultas BD2 (SQL de database/04_consultas_bd2.sql)', () => {
-  test('arquivo tem as 3 consultas e o parser ignora \\echo e o ; final', () => {
+  test('parser: ignora \\echo, tira o ; final e os comentários depois dele, aceita CRLF', () => {
     const c = separarConsultas([
       '-- cabeçalho',
       '-- @consulta a',
       "\\echo 'titulo'",
-      'SELECT 1;',
+      'SELECT 1',
+      '  FROM pecas;',
+      '',
+      '-- comentário da próxima consulta',
       '-- @consulta b',
       'WITH x AS (SELECT 2) SELECT * FROM x;',
-    ].join('\n'));
-    assert.deepEqual(c, { a: 'SELECT 1', b: 'WITH x AS (SELECT 2) SELECT * FROM x' });
+    ].join('\r\n'));
+    assert.deepEqual(c, { a: 'SELECT 1\n  FROM pecas', b: 'WITH x AS (SELECT 2) SELECT * FROM x' });
+  });
+
+  test('parser: rejeita comando que não é SELECT/WITH, dois comandos, falta de ; e nome inválido', () => {
     assert.throws(() => separarConsultas('-- @consulta ruim\nDELETE FROM pecas;'), /não é um SELECT/);
+    assert.throws(() => separarConsultas('-- @consulta x\nSELECT 1;\nDROP TABLE pecas;'), /mais de um comando/);
+    assert.throws(() => separarConsultas('-- @consulta x\nSELECT 1'), /não termina com ;/);
+    assert.throws(() => separarConsultas('-- @consulta Nome_Ruim\nSELECT 1;'), /Nome de consulta inválido/);
+    assert.throws(() => separarConsultas('-- @consulta x\nSELECT 1;\n-- @consulta x\nSELECT 2;'), /duplicada/);
+  });
+
+  test('parser: tempo linear mesmo com entrada patológica (sem ReDoS)', () => {
+    // Com a regex antiga /;\s*(--[^\n]*\s*)*$/, uma entrada assim, com só 49 caracteres,
+    // levava ~10 s (backtracking exponencial). Aqui são 100 mil caracteres.
+    const entrada = `-- @consulta x\nSELECT 1;${'--'.repeat(50000)}x\nSELECT`;
+    const inicio = process.hrtime.bigint();
+    assert.throws(() => separarConsultas(entrada));
+    const ms = Number(process.hrtime.bigint() - inicio) / 1e6;
+    assert.ok(ms < 200, `levou ${ms.toFixed(1)} ms`);
   });
 
   test('MTTR acima da média: só E1 (3h > média 2h)', async () => {
