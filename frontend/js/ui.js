@@ -102,6 +102,60 @@ export function estadoVazio({ titulo, texto, acao }) {
   return el('div', { classe: 'estado-vazio' }, filhos);
 }
 
+// Drawer modal (painel lateral). Reaproveitado por todas as telas:
+//   const d = criarDrawer({ drawer, fundo, botaoOrigem, primeiroCampo, aoFechar });
+//   d.abrir();  d.fechar();  d.aberto()
+// Fechado, o painel fica "inert" (fora do Tab e dos leitores de tela). Aberto: Esc fecha,
+// o Tab fica preso dentro dele e, ao fechar, o foco volta para o botão que o abriu.
+// Elementos com [data-fechar-drawer] dentro do drawer (e o fundo) fecham o painel.
+export function criarDrawer({ drawer, fundo, botaoOrigem, primeiroCampo, aoFechar }) {
+  let origem = botaoOrigem;
+
+  function aberto() {
+    return drawer.classList.contains('aberto');
+  }
+
+  function abrir(novaOrigem) {
+    if (novaOrigem instanceof HTMLElement) origem = novaOrigem;
+    drawer.inert = false;
+    drawer.classList.add('aberto');
+    fundo.classList.add('visivel');
+    document.body.classList.add('drawer-aberto');
+    (primeiroCampo ?? drawer.querySelector('select, input, textarea, button'))?.focus();
+  }
+
+  function fechar() {
+    if (!aberto()) return;
+    drawer.classList.remove('aberto');
+    fundo.classList.remove('visivel');
+    document.body.classList.remove('drawer-aberto');
+    drawer.inert = true;
+    aoFechar?.();
+    origem?.focus();
+  }
+
+  for (const alvo of [...drawer.querySelectorAll('[data-fechar-drawer]'), fundo]) alvo.addEventListener('click', fechar);
+
+  document.addEventListener('keydown', (evento) => {
+    if (!aberto()) return;
+    if (evento.key === 'Escape') {
+      fechar();
+      return;
+    }
+    if (evento.key === 'Tab') {
+      const focaveis = [...drawer.querySelectorAll('button, select, textarea, input, a[href]')]
+        .filter((e) => !e.disabled && e.offsetParent !== null);
+      if (!focaveis.length) return;
+      const primeiro = focaveis[0];
+      const ultimo = focaveis.at(-1);
+      if (evento.shiftKey && document.activeElement === primeiro) { evento.preventDefault(); ultimo.focus(); }
+      else if (!evento.shiftKey && document.activeElement === ultimo) { evento.preventDefault(); primeiro.focus(); }
+    }
+  });
+
+  return { abrir, fechar, aberto };
+}
+
 // Navegação do menu lateral. Telas ainda não feitas aparecem desabilitadas.
 const ITENS_MENU = [
   { id: 'os', href: 'os.html', texto: 'Ordens de serviço' },
