@@ -92,6 +92,12 @@ desenvolvimento. Os testes criam e apagam os próprios usuários, equipamentos e
 | GET | `/api/os/:id` | qualquer logado | detalhe com peças usadas e histórico de auditoria |
 | POST | `/api/os/:id/assumir` | TECNICO | só OS `ABERTA` (senão 409): `EM_ANDAMENTO`, `tecnico_id`, `iniciada_em` |
 | POST | `/api/os/:id/fechar` | TECNICO que assumiu, SUPERVISOR | `{ causa, solucao, horas, pecas?: [{ pecaId, qtd }] }`; só OS `EM_ANDAMENTO` ou `AGUARDANDO_PECA`. Transação: baixa de estoque, `os_pecas`, movimentações SAIDA, OS `FECHADA`; o equipamento volta a `OPERANDO` se não houver outra OS `ABERTA`/`EM_ANDAMENTO`/`AGUARDANDO_PECA`. Falta de estoque: 409 `ESTOQUE_INSUFICIENTE`, nada é gravado e a OS vai para `AGUARDANDO_PECA` |
+| GET | `/api/equipamentos` | qualquer logado | lista com `status` e `os_pendentes` |
+| POST | `/api/equipamentos` | SUPERVISOR | `{ tag, nome, linha, criticidade (A/B/C) }` → 201; tag duplicada: 409 `TAG_DUPLICADA` |
+| GET | `/api/pecas` | qualquer logado | lista com `estoque`, `estoque_min` e `abaixo_minimo` |
+| POST | `/api/pecas` | SUPERVISOR | `{ codigo, descricao, estoqueMin, custoUnit }` → 201, com estoque 0; código duplicado: 409 `CODIGO_DUPLICADO` |
+| POST | `/api/pecas/:id/entrada` | SUPERVISOR | `{ qtd }` → `CALL sp_entrada_estoque`: soma o estoque, grava ENTRADA e resolve alertas → `{ peca, alertasResolvidos }` |
+| GET | `/api/alertas` | SUPERVISOR | alertas de estoque mínimo pendentes |
 
 Toda resposta de erro tem o formato `{ "erro": { "codigo", "mensagem", "detalhes" } }`:
 
