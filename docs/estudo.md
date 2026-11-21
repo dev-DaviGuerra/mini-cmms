@@ -296,6 +296,45 @@ Por isso os KPIs ficaram em FUNCTION (precisam devolver uma tabela consultável 
 
 ---
 
+## Gestão de usuários (issue #28)
+
+**O que foi feito**
+
+1. **Banco:** o script `05_usuarios_ativo.sql` cria a coluna `ativo BOOLEAN NOT NULL DEFAULT true` em `usuarios` e pode ser rodado de novo sem erro (`IF NOT EXISTS`). Foi aplicado no `cmms` e no `cmms_test`. Usuário **nunca é apagado, só desativado**: `ordens_servico`, `movimentacoes` e `os_auditoria` têm chave estrangeira para ele, e apagar quebraria (ou, com CASCADE, apagaria) o histórico.
+2. **API do SUPERVISOR:**
+   - `GET /api/usuarios` lista os usuários;
+   - `POST /api/usuarios` cadastra, com o e-mail normalizado em minúsculas; e-mail duplicado dá 409, pela UNIQUE do banco;
+   - `PATCH /api/usuarios/:id/ativo` ativa ou desativa; o supervisor não pode se desativar (409).
+
+   Para qualquer usuário logado, `POST /api/auth/senha` troca a própria senha, conferindo a atual.
+3. **Política de senha:** mínimo de 10 caracteres, com letra e número, e até 72 bytes. A senha é sempre guardada com bcrypt (custo 10). As consultas listam as colunas explicitamente, então **nenhuma resposta devolve o hash**, e um teste procura `senha_hash` e `$2b$` em todas as respostas.
+4. **Usuário desativado:**
+   - no login, recebe a mesma mensagem de senha errada;
+   - o middleware `autenticar` passou a consultar o banco a cada requisição, então um token já emitido é recusado com **401 na hora**, sem esperar as 8 horas;
+   - o perfil usado na autorização também passou a vir do banco.
+5. **Front:**
+   - `usuarios.html` (o item do menu aparece só para o SUPERVISOR) com lista, cadastro em drawer e ativar/desativar;
+   - "Trocar senha" no rodapé do menu, para todos os perfis;
+   - os dois ajustes pendentes: o seletor de peça mostra código e estoque primeiro, e o pulso do card "Máquinas paradas" foi comprovado desligado com `prefers-reduced-motion`.
+
+   São 12 testes de backend novos (78 no total) e 28 verificações no navegador real.
+
+**Por que não existe cadastro aberto (autocadastro)?**
+O Mini-CMMS é um sistema **interno** de uma fábrica, não um serviço público. Quem pode abrir OS, mexer no estoque ou ver custos é decidido pela empresa, não pela própria pessoa. Com um cadastro aberto, qualquer um que achasse o endereço na internet (o site fica numa VM pública na Azure) poderia criar uma conta e entrar. E, se pudesse escolher o perfil, viraria supervisor. Por isso o cadastro é exclusivo do SUPERVISOR, que define o perfil de cada pessoa (*privilégio mínimo*), e a API recusa com 403 qualquer outro perfil. A senha inicial é combinada pessoalmente, e o próprio usuário pode trocá-la depois em "Trocar senha". Isso também reduz a superfície de ataque: não existe rota pública de criação de conta para ser abusada, por exemplo com criação em massa de contas.
+
+**Perguntas prováveis**
+
+1. *Se o JWT é válido por 8 horas, como desativar alguém tira o acesso na hora?*
+   O JWT sozinho não pode ser "cancelado": ele continua com assinatura válida até expirar. Por isso o middleware `autenticar`, além de verificar a assinatura, faz `SELECT ativo FROM usuarios WHERE id = $1` a cada requisição. Se o usuário foi desativado, a resposta é 401, e o front leva a pessoa para o login com "sessão expirou". O custo é uma consulta simples por chave primária, irrelevante neste volume. Outra opção seria uma lista de tokens revogados, mas a coluna `ativo` resolve com menos peças. No teste, uma aba aberta da usuária desativada cai no login no clique seguinte.
+
+2. *Por que a senha atual errada dá 400 e não 401?*
+   Porque 401 significa "você não está autenticado", e o usuário **está**, porque o token é válido. Errar a senha atual é um dado inválido na requisição. Além disso, o `api.js` do front trata qualquer 401 como sessão perdida e manda para o login, então um 401 aqui derrubaria a sessão de quem só digitou errado. A rota tem rate limit próprio (o mesmo limite do login) para impedir adivinhar a senha atual por tentativa e erro a partir de uma sessão aberta.
+
+3. *Por que exigir a senha atual para trocar, se o usuário já está logado?*
+   Para proteger contra quem encontra um computador com a sessão aberta (no chão de fábrica, isso é comum) ou rouba um token. Sem conferir a senha atual, essa pessoa trocaria a senha e "sequestraria" a conta, trancando o dono do lado de fora. Exigir a senha atual garante que só quem a conhece pode trocá-la. Também recusamos uma nova senha igual à atual, e a política mínima (10 caracteres, com letra e número) vale tanto no cadastro quanto na troca.
+
+---
+
 ## Segurança (QSS)
 
 Registro das correções e dos controles de segurança, para o relatório do QSS.
@@ -356,3 +395,17 @@ Cada linha é examinada uma vez, então o tempo é **linear**: a mesma entrada p
 - **404 do front:** endereços inexistentes fora de `/api` devolvem a página `404.html`, sem detalhes internos. Dentro de `/api`, a resposta continua sendo o JSON padronizado.
 - **Exposição de arquivos:** como o Express serve a pasta `frontend/`, os caminhos `package.json`, `package-lock.json`, `scripts/` e `node_modules/` respondem 404 (com teste). Assim não se revelam versões de dependências, que ajudariam a escolher um exploit. No NGINX do deploy, os mesmos caminhos devem ser bloqueados.
 - **Sem recursos externos:** um teste falha se algum HTML, CSS ou JS do front apontar para uma URL externa ou usar `@import`. No navegador, a verificação "nenhuma requisição a domínio externo" passou.
+
+### S4 — Gestão de usuários e senhas (PR da #28)
+
+| Controle | Como foi feito | Teste |
+|---|---|---|
+| Senhas com hash forte | bcrypt com custo 10 e *salt* aleatório por senha | o hash gravado começa com `$2b$10$` e o `bcrypt.compare` confere |
+| Hash nunca exposto | colunas listadas explicitamente (sem `SELECT *`); `RETURNING` sem `senha_hash` | nenhuma resposta contém `senha_hash` nem `$2b$` |
+| Política de senha | 10+ caracteres, letra e número, até 72 bytes (limite do bcrypt), no cadastro e na troca | 4 casos inválidos devolvem 400 com o motivo |
+| Sem enumeração de contas | e-mail inexistente, senha errada e usuário inativo recebem a mesma resposta e levam o mesmo tempo (bcrypt sempre roda) | as respostas de inativo e de senha errada são idênticas |
+| Revogação imediata | o middleware consulta `ativo` (e o perfil) no banco a cada requisição | token emitido antes da desativação dá 401 em `/me` e `/os` |
+| Privilégio mínimo | só o SUPERVISOR lista, cadastra e (des)ativa; sem autocadastro | OPERADOR e TECNICO recebem 403 em todas as rotas |
+| Contra se trancar fora | o supervisor não desativa a si mesmo | 409 `AUTO_DESATIVACAO`, e ele continua ativo |
+| Força bruta na troca de senha | rate limit próprio em `POST /api/auth/senha` e confirmação da senha atual | senha atual errada dá 400, e a senha não muda |
+| Histórico preservado | usuário nunca é apagado, só desativado | as FKs de OS, movimentações e auditoria continuam válidas |

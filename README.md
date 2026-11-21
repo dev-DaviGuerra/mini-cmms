@@ -15,7 +15,8 @@ disponibilidade e custo). **Todos os dados são fictícios**, gerados pelo `data
 ```
 backend/     API Express (src/routes, src/middlewares, src/services) e tests/
 frontend/    telas HTML + js/ + css/
-database/    01_schema.sql, 02_triggers.sql, 03_procedures.sql, 04_consultas_bd2.sql, seed.js
+database/    01_schema.sql, 02_triggers.sql, 03_procedures.sql, 04_consultas_bd2.sql,
+             05_usuarios_ativo.sql, seed.js
 docs/        estudo.md (resumo de cada etapa + perguntas de banca)
 ```
 
@@ -43,9 +44,10 @@ Pré-requisitos: Node.js 20 e o `psql` (vem com o PostgreSQL).
 # 1. configurar variáveis (DATABASE_URL, DATABASE_URL_TEST, JWT_SECRET, SEED_PASSWORD)
 cp backend/.env.example backend/.env
 
-# 2. criar tabelas, triggers, função de KPIs e procedure, nos DOIS bancos
-psql "$DATABASE_URL"      -f database/01_schema.sql -f database/02_triggers.sql -f database/03_procedures.sql
-psql "$DATABASE_URL_TEST" -f database/01_schema.sql -f database/02_triggers.sql -f database/03_procedures.sql
+# 2. criar tabelas, triggers, função de KPIs, procedure e a coluna usuarios.ativo, nos DOIS bancos
+#    (ordem: 01, 02, 03, 05; o 04 só contém consultas)
+psql "$DATABASE_URL"      -f database/01_schema.sql -f database/02_triggers.sql -f database/03_procedures.sql -f database/05_usuarios_ativo.sql
+psql "$DATABASE_URL_TEST" -f database/01_schema.sql -f database/02_triggers.sql -f database/03_procedures.sql -f database/05_usuarios_ativo.sql
 
 # 3. popular o banco de desenvolvimento com dados fictícios
 cd database && npm install && npm run seed
@@ -107,6 +109,16 @@ desenvolvimento. Os testes criam e apagam os próprios usuários, equipamentos e
 | GET | `/api/kpis/mttr-acima-media` | qualquer logado | consulta BD2 nº 1 (subquery) |
 | GET | `/api/kpis/top-pecas` | qualquer logado | consulta BD2 nº 2 (top 5 peças em 30 dias) |
 | GET | `/api/kpis/pareto-causas` | qualquer logado | consulta BD2 nº 3 (CTE + janela) |
+| POST | `/api/auth/senha` | qualquer logado | `{ senhaAtual, novaSenha }` → 204; senha atual errada: 400 (não 401) |
+| GET | `/api/usuarios` | SUPERVISOR | `[{ id, nome, email, perfil, ativo }]`, nunca o hash |
+| POST | `/api/usuarios` | SUPERVISOR | `{ nome, email, perfil, senha }` → 201; e-mail duplicado: 409 `EMAIL_DUPLICADO` |
+| PATCH | `/api/usuarios/:id/ativo` | SUPERVISOR | `{ ativo: true\|false }`; desativar a si mesmo: 409 `AUTO_DESATIVACAO` |
+
+**Política de senha** (cadastro e troca): mínimo de 10 caracteres, com pelo menos uma letra e
+um número, e até 72 bytes (limite do bcrypt). Senhas sempre com bcrypt (custo 10). Nenhuma
+resposta devolve o hash. Usuários **não são apagados, só desativados**. Um usuário inativo
+não faz login (recebe a mesma mensagem de senha errada), e o token que ele já tinha é recusado
+na próxima requisição, porque o middleware consulta o banco a cada chamada.
 
 As três rotas BD2 executam o SQL **do próprio** `database/04_consultas_bd2.sql`. A API lê o
 arquivo ao subir e separa as consultas pelos marcadores `-- @consulta <nome>`. Assim, o psql e a
@@ -133,6 +145,8 @@ abra **http://localhost:3000**. No deploy, quem serve os arquivos é o NGINX.
 | `index.html` | login em tela dividida (o JWT fica no `sessionStorage`) |
 | `os.html` | indicadores do `/api/kpis/resumo`, lista de OS com filtros e paginação; "+ Nova OS" em painel lateral para OPERADOR e SUPERVISOR |
 | `os-detalhe.html?id=N` | detalhe da OS: dados, peças com custo e histórico de auditoria; "Assumir" (TECNICO, OS aberta) e "Fechar" em painel lateral com lista de peças (TECNICO que assumiu ou SUPERVISOR). Falta de estoque: mensagem com peça, pedido e disponível, e a OS vai para "Aguardando peça" |
+| `usuarios.html` | só SUPERVISOR (o item do menu aparece só para ele): lista de usuários, cadastro em painel lateral e ativar/desativar |
+| (todas as telas) | "Trocar senha" no rodapé do menu, em painel lateral, para qualquer perfil |
 | `404.html` | página para endereços inexistentes fora de `/api` (dentro de `/api` a resposta é JSON) |
 
 Visual "sala de controle industrial": menu lateral grafite, uma única cor de destaque
