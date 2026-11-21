@@ -14,17 +14,29 @@ Referência completa: `Mini-CMMS_Projeto_AVD2.pdf` (local, fora do git).
   ENTRADA e resolve alertas quando o estoque volta a ficar >= mínimo.
 - 3 consultas BD2 em `database/04_consultas_bd2.sql`.
 - `database/seed.js`: 10 equipamentos, 30 peças, ~200 OS fictícias em 90 dias.
+- `database/05_usuarios_ativo.sql` (#28): coluna `usuarios.ativo`. Ordem de aplicação: 01, 02,
+  03, 05 (o 04 só tem consultas).
 
 **API** — Node 20 + Express (ES Modules)
 - Login JWT com perfis OPERADOR / TECNICO / SUPERVISOR; senhas com bcrypt.
 - Rotas: OS (abrir, assumir, fechar com transação e ROLLBACK), equipamentos, peças, KPIs.
+- Gestão de usuários (#28): `/api/usuarios` (SUPERVISOR) e `POST /api/auth/senha`.
 - Sempre queries parametrizadas; `helmet`; `express-rate-limit`.
 
 **Front** — HTML + JS vanilla + Chart.js
-- Telas: login, lista de OS, detalhe/fechamento da OS, dashboard.
+- Telas: login, lista de OS, detalhe/fechamento da OS, usuários (SUPERVISOR), dashboard.
+- Escopo ampliado a pedido do usuário: telas de Equipamentos e Estoque (#26). A entrada de
+  estoque fica na tela de Estoque, e o dashboard (#10) só tem indicadores e gráficos.
 
-Fora do escopo (só se o usuário pedir): tela de estoque, cancelamento de OS, entrada de nota,
-deploy, SonarCloud, artigo, slides.
+Fora do escopo (só se o usuário pedir): cancelamento de OS, entrada de nota, cadastro aberto
+(autocadastro) de usuários, deploy, SonarCloud, artigo, slides.
+
+**Segurança de usuários (#28):**
+- Nunca apagar usuário, só desativar.
+- Nunca devolver `senha_hash`: listar as colunas explicitamente, sem `SELECT *`.
+- O middleware `autenticar` consulta o banco a cada requisição: usuário inativo recebe 401, e o
+  perfil vem do banco, não do token.
+- Erros de senha atual usam 400, nunca 401, porque um 401 derruba a sessão no front.
 
 ## Regras de trabalho
 1. Manter `README.md` e este `CLAUDE.md` atualizados.
@@ -125,8 +137,8 @@ deploy, SonarCloud, artigo, slides.
 ## Comandos
 ```bash
 # aplicar o banco (URLs lidas do backend/.env; sempre entre aspas por causa do &)
-psql "$DATABASE_URL"      -f database/01_schema.sql -f database/02_triggers.sql -f database/03_procedures.sql
-psql "$DATABASE_URL_TEST" -f database/01_schema.sql -f database/02_triggers.sql -f database/03_procedures.sql
+psql "$DATABASE_URL"      -f database/01_schema.sql -f database/02_triggers.sql -f database/03_procedures.sql -f database/05_usuarios_ativo.sql
+psql "$DATABASE_URL_TEST" -f database/01_schema.sql -f database/02_triggers.sql -f database/03_procedures.sql -f database/05_usuarios_ativo.sql
 cd database && npm install && npm run seed
 psql "$DATABASE_URL" -f database/04_consultas_bd2.sql
 cd backend && npm test && npm start
