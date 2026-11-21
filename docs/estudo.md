@@ -1,0 +1,58 @@
+# Caderno de estudo — Mini-CMMS
+
+Um resumo por etapa, com perguntas que um professor poderia fazer na apresentação.
+
+---
+
+## Etapa 1 — Banco de dados (issue #1)
+
+**O que foi feito**
+
+1. Criei as 8 tabelas da seção 5 em `01_schema.sql`, com chaves estrangeiras e `CHECK`s. Entre eles, `estoque >= 0` e status e perfis permitidos.
+2. `02_triggers.sql` tem duas triggers. `trg_estoque_minimo` cria um alerta quando o estoque cruza o mínimo. `trg_auditoria_os` registra cada mudança de status da OS com o usuário, que recebe via `SET LOCAL app.usuario_id`.
+3. `03_procedures.sql` cria `sp_kpis_equipamento(data_ini, data_fim)`. Ela usa CTEs para calcular, por equipamento, MTTR, MTBF, disponibilidade e custo (peças + horas × custo/hora).
+4. `04_consultas_bd2.sql` tem 3 consultas. A primeira mostra o MTTR acima da média (subquery). A segunda, o top 5 de peças em 30 dias (JOIN + GROUP BY/HAVING). A terceira, o Pareto de causas (CTE + funções de janela).
+5. `seed.js` gera numa única transação dados fictícios e reproduzíveis (semente fixa): 4 usuários, 10 equipamentos, 30 peças e cerca de 200 OS em 90 dias.
+
+**Perguntas prováveis**
+
+1. *Por que a trigger de estoque compara `OLD` e `NEW` em vez de só checar `NEW.estoque < NEW.estoque_min`?*
+   Para gerar o alerta só no momento em que o estoque **cruza** o mínimo. Se olhasse só o `NEW`, toda baixa de uma peça que já está abaixo do mínimo criaria um alerta repetido.
+
+2. *Como a trigger de auditoria sabe qual usuário mudou o status, se o banco só conhece o usuário da conexão do pool?*
+   A API roda `SET LOCAL app.usuario_id = '<id>'` dentro da transação, e a trigger lê com `current_setting('app.usuario_id', true)`. O `SET LOCAL` vale só até o COMMIT/ROLLBACK, então o valor não vaza para outra requisição que reutilize a mesma conexão.
+
+3. *O que acontece se o fechamento de uma OS tentar baixar mais peças do que há em estoque?*
+   O `UPDATE ... WHERE estoque >= qtd` não afeta nenhuma linha e a API lança erro. Mesmo que alguém esqueça essa condição, o `CHECK (estoque >= 0)` do banco rejeita o valor negativo. Nos dois casos a transação sofre ROLLBACK e nada é gravado: nem `os_pecas`, nem movimentações, nem a mudança de status.
+
+### Complemento — procedure `sp_entrada_estoque`
+
+**O que foi feito**
+
+1. Em `03_procedures.sql` criei uma PROCEDURE de verdade (`CREATE PROCEDURE`), chamada com `CALL sp_entrada_estoque(peca, qtd, usuario)`.
+2. Ela soma a quantidade ao estoque e grava uma movimentação `ENTRADA` com o usuário, para manter a rastreabilidade.
+3. Se o estoque voltar a ficar `>=` estoque mínimo, marca como `resolvido = true` os alertas pendentes da peça. A trigger cria o alerta e a procedure o fecha.
+4. Ela valida a quantidade (> 0) e a existência da peça com `RAISE EXCEPTION`. Um usuário inválido é barrado pela FK. Qualquer erro desfaz a chamada inteira.
+5. Ela não faz COMMIT própria: quando chamada dentro de `BEGIN … ROLLBACK`, a entrada é desfeita junto com o resto. Testei a entrada parcial (alerta continua pendente), a entrada que resolve o alerta, os 3 erros e o rollback.
+
+**FUNCTION × PROCEDURE no PostgreSQL**
+
+| | FUNCTION | PROCEDURE (PostgreSQL 11+) |
+|---|---|---|
+| Como chamar | dentro de SQL: `SELECT * FROM f(...)`, em `WHERE`, `JOIN` etc. | sozinha, com `CALL p(...)` |
+| Retorno | obrigatório: valor, linha ou tabela (`RETURNS TABLE`) | não tem `RETURNS`; só devolve dados por parâmetros `INOUT`/`OUT` |
+| Controle de transação | não pode `COMMIT`/`ROLLBACK`; roda dentro da transação de quem chamou | pode `COMMIT`/`ROLLBACK` internamente, mas só se chamada fora de um bloco `BEGIN` explícito |
+| Uso típico | cálculo/consulta reaproveitável (`sp_kpis_equipamento`) | ação com efeitos colaterais (`sp_entrada_estoque`) |
+
+Por isso os KPIs ficaram em FUNCTION (precisam devolver uma tabela consultável com `SELECT`, inclusive dentro de subqueries) e a entrada de estoque ficou em PROCEDURE (é uma ação). Tentar `CALL sp_kpis_equipamento(...)` dá erro: *procedure does not exist*.
+
+**Perguntas prováveis**
+
+1. *Por que `sp_kpis_equipamento` tem prefixo "sp_" mas é FUNCTION?*
+   O nome veio do enunciado. No PostgreSQL, uma PROCEDURE não devolve um conjunto de linhas, e a consulta BD2 nº 1 precisa usar o resultado em `FROM` e numa subquery. Só uma FUNCTION com `RETURNS TABLE` permite isso.
+
+2. *Por que a procedure não faz COMMIT no final?*
+   Para ser componível. Se ela fizesse COMMIT, não daria para juntá-la a outros passos numa transação maior (ex.: uma nota com várias peças), e um erro na 3ª peça não desfaria as duas primeiras. Além disso, COMMIT dentro de procedure falha quando ela é chamada dentro de um `BEGIN` explícito, que é como a API trabalha.
+
+3. *Quem garante que o alerta é resolvido no momento certo, e por que não usar outra trigger?*
+   A própria procedure, depois do UPDATE, compara o estoque novo com o mínimo (`RETURNING estoque, estoque_min`). Uma trigger também funcionaria, mas deixar na procedure torna a regra explícita no fluxo de entrada e evita uma cadeia de triggers difícil de depurar. A trigger fica só com o papel de **detectar** o problema.
