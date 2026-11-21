@@ -126,6 +126,26 @@ describe('POST /api/os/:id/fechar — sucesso', () => {
     assert.equal(await statusEquip(eq.id), 'OPERANDO', 'nenhuma OS pendente');
   });
 
+  test('equipamento continua PARADO se houver outra OS AGUARDANDO_PECA para ele', async () => {
+    const eq = await novoEquipamento();
+    const semSaldo = await novaPeca({ estoque: 0 });
+
+    // osA fica AGUARDANDO_PECA (tentativa de fechar sem estoque)
+    const osA = await osEmAndamento(eq.id);
+    assert.equal((await fechar(osA.id, tokens.TECNICO, { pecas: [{ pecaId: semSaldo.id, qtd: 1 }] })).status, 409);
+    assert.equal(await statusOs(osA.id), 'AGUARDANDO_PECA');
+
+    // osB é fechada normalmente, mas osA ainda segura o equipamento
+    const osB = await osEmAndamento(eq.id, tokens.TECNICO2);
+    assert.equal((await fechar(osB.id, tokens.TECNICO2)).status, 200);
+    assert.equal(await statusEquip(eq.id), 'PARADO', 'osA ainda AGUARDANDO_PECA');
+
+    // reposição e fechamento de osA liberam o equipamento
+    await pool.query('CALL sp_entrada_estoque($1, $2, $3)', [semSaldo.id, 1, usuarios.SUPERVISOR.id]);
+    assert.equal((await fechar(osA.id, tokens.TECNICO, { pecas: [{ pecaId: semSaldo.id, qtd: 1 }] })).status, 200);
+    assert.equal(await statusEquip(eq.id), 'OPERANDO');
+  });
+
   test('supervisor pode fechar OS assumida por um técnico', async () => {
     const eq = await novoEquipamento();
     const os = await osEmAndamento(eq.id);

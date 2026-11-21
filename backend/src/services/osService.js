@@ -103,7 +103,8 @@ async function baixarPeca(client, { pecaId, qtd }) {
 //   1. trava OS e equipamento; confere status (EM_ANDAMENTO ou AGUARDANDO_PECA) e permissão
 //   2. para cada peça: baixa condicional do estoque, os_pecas (custo do momento), movimentação SAIDA
 //   3. OS -> FECHADA com fechada_em, horas, causa e solução
-//   4. equipamento -> OPERANDO, só se não houver OUTRA OS ABERTA ou EM_ANDAMENTO para ele
+//   4. equipamento -> OPERANDO, só se não houver OUTRA OS pendente para ele
+//      (ABERTA, EM_ANDAMENTO ou AGUARDANDO_PECA: todas mantêm o equipamento PARADO)
 //   5. COMMIT. Qualquer erro => ROLLBACK (nada do que foi feito acima fica gravado).
 // Se o erro for estoque insuficiente, uma SEGUNDA transação, separada, coloca a OS em
 // AGUARDANDO_PECA (a primeira já foi desfeita, então só o status muda) e o 409 é repassado.
@@ -148,7 +149,7 @@ export async function fecharOs(id, { causa, solucao, horas, pecas }, usuario) {
           WHERE id = $1
             AND NOT EXISTS (SELECT 1 FROM ordens_servico
                              WHERE equipamento_id = $1 AND id <> $2
-                               AND status IN ('ABERTA', 'EM_ANDAMENTO'))`,
+                               AND status IN ('ABERTA', 'EM_ANDAMENTO', 'AGUARDANDO_PECA'))`,
         [os.equipamento_id, id],
       );
     });
