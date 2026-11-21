@@ -278,6 +278,10 @@ a.botao { text-decoration: none; }
 .botao.secundario:hover:not(:disabled) { background: var(--cinza-100); }
 .botao.no-escuro { background: transparent; color: var(--grafite-300); border-color: var(--grafite-700); width: 100%; }
 .botao.no-escuro:hover { color: var(--branco); border-color: var(--grafite-400); }
+.menu-acoes { display: grid; grid-template-columns: 1fr auto; gap: var(--esp-2); }
+.menu-acoes .botao { padding: 0 var(--esp-3); }
+.botao.perigo { color: var(--perigo); border-color: color-mix(in srgb, var(--perigo) 35%, transparent); }
+.botao.perigo:hover:not(:disabled) { background: var(--perigo-suave); }
 .botao.icone { min-width: 36px; padding: 0; font-size: 1.25rem; line-height: 1; }
 .botao.largo { width: 100%; min-height: 42px; font-size: var(--texto-base); }
 
@@ -309,7 +313,7 @@ a.botao { text-decoration: none; }
   border-radius: var(--raio);
 }
 .campo textarea { resize: vertical; min-height: 96px; }
-.campo .ajuda { font-size: var(--texto-xs); color: var(--texto-suave); }
+.ajuda { margin: 0; font-size: var(--texto-xs); color: var(--texto-suave); }
 
 .filtros { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--esp-3); }
 .filtros .campo { width: 180px; }
@@ -386,6 +390,27 @@ button.indicador:hover { background: var(--cinza-50); }
 .status.fechada { --cor-status: var(--status-fechada); }
 .status.cancelada { --cor-status: var(--status-cancelada); }
 .status.critico { --cor-status: var(--critico); }
+.status.ativo { --cor-status: var(--sucesso); }
+.status.inativo { --cor-status: var(--grafite-400); }
+
+/* usuários: linha de inativo esmaecida; etiqueta "você" */
+.tabela tr.inativo td { color: var(--texto-suave); }
+.etiqueta {
+  margin-left: var(--esp-2);
+  padding: 0 var(--esp-2);
+  font-size: var(--texto-xs);
+  font-weight: 600;
+  border-radius: 999px;
+  background: var(--destaque-suave);
+  color: var(--grafite-900);
+}
+.nota-painel {
+  margin: 0;
+  padding: var(--esp-3) var(--esp-4);
+  font-size: var(--texto-sm);
+  color: var(--texto-suave);
+  border-bottom: 1px solid var(--borda);
+}
 .indicador-rotulo.status::before { width: 8px; height: 8px; }
 
 .prioridade { font-size: var(--texto-sm); font-weight: 500; color: var(--grafite-700); white-space: nowrap; }
@@ -505,6 +530,28 @@ button.indicador:hover { background: var(--cinza-50); }
 .alerta-sucesso { background: var(--sucesso-suave); border-color: var(--sucesso); color: #1c4d33; }
 .alerta-aviso { background: var(--aviso-suave); border-color: var(--aviso); color: #6b4100; }
 .alerta-info { background: var(--info-suave); border-color: var(--info); color: #173f6e; }
+
+/* avisos flutuantes (ex.: "Senha alterada") */
+.avisos {
+  position: fixed;
+  right: var(--esp-5);
+  bottom: var(--esp-5);
+  z-index: calc(var(--camada-drawer) + 10);
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-2);
+  max-width: 380px;
+}
+.aviso {
+  padding: var(--esp-3) var(--esp-4);
+  border-radius: var(--raio);
+  border-left: 4px solid var(--sucesso);
+  background: var(--grafite-900);
+  color: var(--branco);
+  font-size: var(--texto-md);
+  box-shadow: var(--sombra-2);
+}
+.aviso-erro { border-left-color: var(--perigo); }
 
 /* =====================================================================
    Drawer (painel lateral por cima da lista)
@@ -652,7 +699,7 @@ body.drawer-aberto { overflow: hidden; }
 .lista-pecas { display: flex; flex-direction: column; gap: var(--esp-2); }
 .linha-peca {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 84px 36px;
+  grid-template-columns: minmax(0, 1fr) 72px 36px;
   gap: var(--esp-2);
   align-items: center;
   padding: var(--esp-2);

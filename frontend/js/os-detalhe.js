@@ -201,12 +201,16 @@ $('botao-assumir').addEventListener('click', async () => {
 // ---------------------------------------------------------------------------------
 let contadorLinhas = 0;
 
+// Texto da opção: código e estoque PRIMEIRO (o que o técnico precisa ver) e a descrição
+// encurtada no fim, onde um eventual corte do <select> não esconde nada importante.
+const encurtar = (texto, max) => (texto.length > max ? `${texto.slice(0, max - 1)}…` : texto);
+
 function opcoesPecas() {
   return [
     el('option', { texto: 'Selecione a peça…', attrs: { value: '' } }),
     ...pecasEstoque.map((p) => el('option', {
-      texto: `${p.codigo} — ${p.descricao} (estoque ${p.estoque})`,
-      attrs: { value: p.id },
+      texto: `${p.codigo} · estoque ${p.estoque} · ${encurtar(p.descricao, 12)}`,
+      attrs: { value: p.id, title: `${p.codigo} — ${p.descricao} (estoque ${p.estoque})` },
     })),
   ];
 }
