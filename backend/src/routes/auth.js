@@ -1,0 +1,45 @@
+// Rotas de autenticação: /api/auth
+import { Router } from 'express';
+import { rateLimit } from 'express-rate-limit';
+import { autenticar } from '../middlewares/auth.js';
+import { ErroValidacao } from '../errors.js';
+import * as authService from '../services/authService.js';
+
+const router = Router();
+
+// Limite mais rígido no login para dificultar ataque de força bruta em senhas
+const limiteLogin = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: {
+    erro: { codigo: 'MUITAS_TENTATIVAS', mensagem: 'Muitas tentativas de login. Tente em 15 minutos.' },
+  },
+});
+
+function validarLogin(body) {
+  const { email, senha } = body ?? {};
+  const problemas = [];
+  if (typeof email !== 'string' || !/^[^\s@]+@[^\s@]+$/.test(email) || email.length > 150) {
+    problemas.push('email deve ser um e-mail válido');
+  }
+  if (typeof senha !== 'string' || senha.length === 0 || senha.length > 72) {
+    problemas.push('senha é obrigatória (até 72 caracteres)'); // 72 = limite do bcrypt
+  }
+  if (problemas.length) throw new ErroValidacao('Dados de login inválidos', problemas);
+  return { email, senha };
+}
+
+// POST /api/auth/login  { email, senha }  ->  { token, expiraEm, usuario }
+router.post('/login', limiteLogin, async (req, res) => {
+  const { email, senha } = validarLogin(req.body);
+  res.json(await authService.login(email, senha));
+});
+
+// GET /api/auth/me  ->  dados do usuário do token (útil para o front validar a sessão)
+router.get('/me', autenticar, (req, res) => {
+  res.json({ usuario: req.usuario });
+});
+
+export default router;
