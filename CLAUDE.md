@@ -85,6 +85,20 @@ deploy, SonarCloud, artigo, slides.
 - Testes em `backend/tests/*.test.js`. Cada arquivo cria e remove os próprios dados
   (`tests/helpers.js`).
 
+## Convenções do front (`frontend/`)
+- HTML + CSS + JS puro com ES Modules, sem framework e sem build. O Express serve a pasta em
+  desenvolvimento (`NODE_ENV` diferente de `production`); no deploy, o NGINX.
+- Toda chamada à API passa por `js/api.js` (token do `sessionStorage`, `ErroApi`, 401 => login).
+  Páginas protegidas começam com `const usuario = await exigirLogin();`.
+- **Nunca `innerHTML`/`outerHTML`/`insertAdjacentHTML`** com dados: criar os elementos com
+  `el()` de `js/ui.js` (usa `textContent`). Há um teste que falha se aparecerem no código.
+- CSP sem `'unsafe-inline'`: nada de `<script>` inline, `style="..."` ou `onclick=` no HTML
+  (também há teste). Estilos só em `css/estilo.css`; eventos com `addEventListener`.
+- Esconder botões por perfil é só conforto; a permissão é sempre validada na API.
+- Teste no navegador: Edge headless com `puppeteer-core` instalado no scratchpad (fora do
+  projeto). Cada rodada faz vários logins; o rate limit de login é 10/15 min por IP, então
+  reinicie a API antes de repetir.
+
 ## Comandos
 ```bash
 # aplicar o banco (URLs lidas do backend/.env; sempre entre aspas por causa do &)

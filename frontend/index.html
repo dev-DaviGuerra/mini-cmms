@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Entrar · Mini-CMMS</title>
+  <link rel="stylesheet" href="css/estilo.css">
+  <script type="module" src="js/login.js"></script>
+</head>
+<body class="pagina-login">
+  <main class="cartao-login">
+    <div class="marca-login">
+      <span class="marca-icone" aria-hidden="true"></span>
+      <div>
+        <h1>Mini-CMMS</h1>
+        <p class="subtitulo">Ordens de manutenção e estoque de peças</p>
+      </div>
+    </div>
+
+    <div id="mensagem" role="alert" hidden></div>
+
+    <form id="form-login" novalidate>
+      <label for="email">E-mail</label>
+      <input id="email" name="email" type="email" autocomplete="username" required>
+
+      <label for="senha">Senha</label>
+      <input id="senha" name="senha" type="password" autocomplete="current-password" required>
+
+      <button id="botao-entrar" type="submit" class="botao primario largo">Entrar</button>
+    </form>
+
+    <p class="rodape-login">Projeto acadêmico · todos os dados são fictícios</p>
+  </main>
+</body>
+</html>
