@@ -1,7 +1,7 @@
 // Utilitários de interface. REGRA DE SEGURANÇA: dados vindos da API entram na página só por
 // textContent (via el()), nunca por innerHTML. Assim um texto como "<img onerror=...>" gravado
 // numa descrição de OS aparece como texto e não é executado (proteção contra XSS).
-import { sair } from './api.js';
+import { api, ErroApi, sair } from './api.js';
 
 export function el(tag, opcoes = {}, filhos = []) {
   const elemento = document.createElement(tag);
@@ -33,7 +33,7 @@ export const ROTULOS_PRIORIDADE = Object.freeze({
 
 export const ROTULOS_TIPO = Object.freeze({ CORRETIVA: 'Corretiva', PREVENTIVA: 'Preventiva' });
 
-const ROTULOS_PERFIL = Object.freeze({ OPERADOR: 'Operador', TECNICO: 'Técnico', SUPERVISOR: 'Supervisor' });
+export const ROTULOS_PERFIL = Object.freeze({ OPERADOR: 'Operador', TECNICO: 'Técnico', SUPERVISOR: 'Supervisor' });
 
 // 'AGUARDANDO_PECA' -> 'aguardando-peca' (nome de classe CSS)
 export const classeDe = (valor) => String(valor).toLowerCase().replaceAll('_', '-');
@@ -156,35 +156,162 @@ export function criarDrawer({ drawer, fundo, botaoOrigem, primeiroCampo, aoFecha
   return { abrir, fechar, aberto };
 }
 
-// Navegação do menu lateral. Telas ainda não feitas aparecem desabilitadas.
-const ITENS_MENU = [
-  { id: 'os', href: 'os.html', texto: 'Ordens de serviço' },
-  { id: 'equipamentos', texto: 'Equipamentos' },
-  { id: 'estoque', texto: 'Estoque' },
-  { id: 'dashboard', texto: 'Dashboard' },
+// ---------------------------------------------------------------------------------
+// Avisos flutuantes (ex.: "Senha alterada"). role=status: o leitor de tela anuncia.
+// ---------------------------------------------------------------------------------
+export function avisar(texto, tipo = 'sucesso') {
+  let pilha = document.getElementById('avisos');
+  if (!pilha) {
+    pilha = el('div', { classe: 'avisos', attrs: { id: 'avisos', role: 'status', 'aria-live': 'polite' } });
+    document.body.append(pilha);
+  }
+  const aviso = el('div', { classe: `aviso aviso-${tipo}`, texto });
+  pilha.append(aviso);
+  setTimeout(() => aviso.remove(), 5000);
+}
+
+// Política de senha (a mesma da API). Só conforto: quem valida de verdade é a API.
+export function problemasSenha(senha, rotulo = 'A senha') {
+  const problemas = [];
+  if (senha.length < 10) problemas.push(`${rotulo} deve ter pelo menos 10 caracteres.`);
+  if (!/\p{L}/u.test(senha)) problemas.push(`${rotulo} deve ter pelo menos uma letra.`);
+  if (!/\d/.test(senha)) problemas.push(`${rotulo} deve ter pelo menos um número.`);
+  if (new TextEncoder().encode(senha).length > 72) problemas.push(`${rotulo} deve ter no máximo 72 bytes.`);
+  return problemas;
+}
+
+export const TEXTO_POLITICA_SENHA = 'Mínimo de 10 caracteres, com pelo menos uma letra e um número.';
+
+// ---------------------------------------------------------------------------------
+// Menu lateral
+// ---------------------------------------------------------------------------------
+// Itens sem href aparecem desabilitados ("em breve"). "perfis" restringe quem vê o item
+// (só conforto visual: a API também barra com 403).
+const GRUPOS_MENU = [
+  {
+    titulo: 'Operação',
+    itens: [
+      { id: 'os', href: 'os.html', texto: 'Ordens de serviço' },
+      { id: 'equipamentos', texto: 'Equipamentos' },
+      { id: 'estoque', texto: 'Estoque' },
+      { id: 'dashboard', texto: 'Dashboard' },
+    ],
+  },
+  {
+    titulo: 'Administração',
+    itens: [{ id: 'usuarios', href: 'usuarios.html', texto: 'Usuários', perfis: ['SUPERVISOR'] }],
+  },
 ];
 
-// Menu lateral: logo, navegação e, no rodapé, usuário + perfil + Sair
+function itemMenu(item, paginaAtual) {
+  if (!item.href) {
+    return el('span', { classe: 'menu-item desabilitado', attrs: { 'aria-disabled': 'true' } }, [
+      el('span', { texto: item.texto }),
+      el('span', { classe: 'em-breve', texto: 'em breve' }),
+    ]);
+  }
+  const ativo = item.id === paginaAtual;
+  return el('a', {
+    classe: `menu-item${ativo ? ' ativo' : ''}`,
+    attrs: { href: item.href, ...(ativo ? { 'aria-current': 'page' } : {}) },
+  }, [el('span', { texto: item.texto })]);
+}
+
+// Drawer "Trocar senha": criado por JS uma única vez, igual em todas as páginas.
+function montarDrawerSenha(botaoOrigem) {
+  const caixa = el('div', { attrs: { role: 'alert', hidden: '' } });
+  const campo = (id, rotulo, autocomplete) => el('div', { classe: 'campo' }, [
+    el('label', { texto: rotulo, attrs: { for: id } }),
+    el('input', { attrs: { id, name: id, type: 'password', autocomplete, required: '', maxlength: 72 } }),
+  ]);
+  const form = el('form', { classe: 'drawer-form', attrs: { novalidate: '' } }, [
+    el('div', { classe: 'drawer-cabecalho' }, [
+      el('h2', { texto: 'Trocar senha', attrs: { id: 'titulo-senha' } }),
+      el('button', { classe: 'botao secundario icone', texto: '×', attrs: { type: 'button', 'data-fechar-drawer': '', 'aria-label': 'Fechar painel' } }),
+    ]),
+    el('div', { classe: 'drawer-corpo' }, [
+      caixa,
+      campo('senha-atual', 'Senha atual', 'current-password'),
+      campo('senha-nova', 'Nova senha', 'new-password'),
+      campo('senha-confirmacao', 'Confirme a nova senha', 'new-password'),
+      el('p', { classe: 'ajuda', texto: TEXTO_POLITICA_SENHA }),
+    ]),
+    el('div', { classe: 'drawer-rodape' }, [
+      el('button', { classe: 'botao secundario', texto: 'Cancelar', attrs: { type: 'button', 'data-fechar-drawer': '' } }),
+      el('button', { classe: 'botao primario', texto: 'Salvar nova senha', attrs: { type: 'submit' } }),
+    ]),
+  ]);
+  const drawer = el('aside', {
+    classe: 'drawer',
+    attrs: { id: 'drawer-senha', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'titulo-senha', inert: '' },
+  }, [form]);
+  const fundo = el('div', { classe: 'fundo-drawer', attrs: { id: 'fundo-senha' } });
+  document.body.append(drawer, fundo);
+
+  const controle = criarDrawer({
+    drawer,
+    fundo,
+    botaoOrigem,
+    primeiroCampo: form.querySelector('#senha-atual'),
+    aoFechar: () => { form.reset(); esconderMensagem(caixa); },
+  });
+
+  form.addEventListener('submit', async (evento) => {
+    evento.preventDefault();
+    esconderMensagem(caixa);
+    const senhaAtual = form.querySelector('#senha-atual').value;
+    const novaSenha = form.querySelector('#senha-nova').value;
+    const confirmacao = form.querySelector('#senha-confirmacao').value;
+
+    const problemas = [];
+    if (!senhaAtual) problemas.push('Informe a senha atual.');
+    problemas.push(...problemasSenha(novaSenha, 'A nova senha'));
+    if (novaSenha !== confirmacao) problemas.push('A confirmação não é igual à nova senha.');
+    if (problemas.length) {
+      mostrarMensagem(caixa, 'Confira os campos:', 'erro', problemas);
+      return;
+    }
+
+    const botao = form.querySelector('button[type="submit"]');
+    botao.disabled = true;
+    try {
+      await api.post('/auth/senha', { senhaAtual, novaSenha });
+      controle.fechar();
+      avisar('Senha alterada com sucesso. Use a nova senha no próximo login.');
+    } catch (erro) {
+      const detalhes = erro instanceof ErroApi && Array.isArray(erro.detalhes) ? erro.detalhes : null;
+      mostrarMensagem(caixa, erro instanceof ErroApi ? erro.mensagem : `Erro inesperado: ${erro.message}`, 'erro', detalhes);
+    } finally {
+      botao.disabled = false;
+    }
+  });
+
+  return controle;
+}
+
+// Menu lateral: logo, navegação por grupos e, no rodapé, usuário + perfil + Trocar senha + Sair
 export function montarLayout(usuario, paginaAtual) {
   const marca = el('a', { classe: 'menu-marca', attrs: { href: 'os.html' } }, [
     el('img', { attrs: { src: 'img/logo.svg', alt: '', width: 30, height: 30 } }),
     el('span', { texto: 'Mini-CMMS' }),
   ]);
 
-  const itens = ITENS_MENU.map((item) => {
-    if (!item.href) {
-      return el('span', { classe: 'menu-item desabilitado', attrs: { 'aria-disabled': 'true' } }, [
-        el('span', { texto: item.texto }),
-        el('span', { classe: 'em-breve', texto: 'em breve' }),
-      ]);
-    }
-    const ativo = item.id === paginaAtual;
-    return el('a', {
-      classe: `menu-item${ativo ? ' ativo' : ''}`,
-      attrs: { href: item.href, ...(ativo ? { 'aria-current': 'page' } : {}) },
-    }, [el('span', { texto: item.texto })]);
+  const grupos = [];
+  GRUPOS_MENU.forEach((grupo, i) => {
+    const itens = grupo.itens.filter((item) => !item.perfis || item.perfis.includes(usuario.perfil));
+    if (!itens.length) return;
+    const idTitulo = `titulo-menu-${i}`;
+    grupos.push(
+      el('p', { classe: 'menu-titulo', texto: grupo.titulo, attrs: { id: idTitulo } }),
+      el('nav', { classe: 'menu-nav', attrs: { 'aria-labelledby': idTitulo } }, itens.map((item) => itemMenu(item, paginaAtual))),
+    );
   });
 
+  const botaoSenha = el('button', {
+    classe: 'botao no-escuro',
+    texto: 'Trocar senha',
+    attrs: { type: 'button', id: 'botao-trocar-senha', 'aria-haspopup': 'dialog', 'aria-controls': 'drawer-senha' },
+  });
   const botaoSair = el('button', { classe: 'botao no-escuro', texto: 'Sair', attrs: { type: 'button' } });
   botaoSair.addEventListener('click', () => sair('saiu'));
 
@@ -193,12 +320,14 @@ export function montarLayout(usuario, paginaAtual) {
   menu.append(
     marca,
     el('div', { classe: 'menu-faixa', attrs: { 'aria-hidden': 'true' } }),
-    el('p', { classe: 'menu-titulo', texto: 'Operação', attrs: { id: 'titulo-menu' } }),
-    el('nav', { classe: 'menu-nav', attrs: { 'aria-labelledby': 'titulo-menu' } }, itens),
+    ...grupos,
     el('div', { classe: 'menu-rodape' }, [
       el('span', { classe: 'menu-usuario-nome', texto: usuario.nome }),
       el('span', { classe: 'menu-usuario-perfil', texto: ROTULOS_PERFIL[usuario.perfil] ?? usuario.perfil }),
-      botaoSair,
+      el('div', { classe: 'menu-acoes' }, [botaoSenha, botaoSair]),
     ]),
   );
+
+  const drawerSenha = montarDrawerSenha(botaoSenha);
+  botaoSenha.addEventListener('click', () => drawerSenha.abrir());
 }
