@@ -273,6 +273,29 @@ Por isso os KPIs ficaram em FUNCTION (precisam devolver uma tabela consultável 
 
 ---
 
+## Etapa 9 — Front: detalhe e fechamento da OS (issue #9)
+
+**O que foi feito**
+
+1. A página `os-detalhe.html?id=N` mostra os dados da OS, a seção de fechamento (causa, solução e horas), as peças usadas com custo unitário do momento e total, e o **histórico**. O histórico é uma linha do tempo que começa na abertura e segue com as mudanças gravadas pela trigger `trg_auditoria_os`, com usuário e data.
+2. **Assumir** aparece para o TECNICO em OS aberta. **Fechar** aparece para o técnico que assumiu ou para o SUPERVISOR. Quando não há botão, a tela explica o motivo, como "Assumida por Tina. Só ela ou um supervisor pode fechar".
+3. O fechamento acontece num drawer com causa (com sugestões das causas mais comuns), solução, horas e uma **lista de peças**. Cada linha tem a seleção da peça, mostrando o estoque atual, e a quantidade. Linhas vazias, quantidades inválidas e peças repetidas são barradas na própria tela.
+4. O **409 de estoque insuficiente** aparece de forma clara: qual peça, quanto foi pedido e quanto há; que nada foi gravado (ROLLBACK); e que a OS foi para "Aguardando peça". A linha da peça que faltou fica destacada, com o foco na quantidade, e a tela de trás já mostra o novo status. Depois da reposição, o técnico fecha de novo.
+5. A lógica do drawer virou `criarDrawer()` em `ui.js`, reaproveitada pela lista e pelas próximas telas. Ajustes de visual: o card "Máquinas paradas" ganhou cor crítica própria, ponto pulsando quando há máquina parada (respeitando `prefers-reduced-motion`) e fundo de alerta, e saiu o rótulo "OPERAÇÃO" de cima dos títulos. Teste de ponta a ponta: **29/29** num navegador real, contra uma instância da API ligada ao `cmms_test`.
+
+**Perguntas prováveis**
+
+1. *Se a transação de fechamento é desfeita, como a tela sabe o que mostrar?*
+   A API responde 409 com `codigo: ESTOQUE_INSUFICIENTE` e `detalhes: { pecaId, codigo, solicitado, disponivel }`. O front usa esses dados para montar a mensagem e para achar, pelo `pecaId`, a linha do formulário que deve ser destacada. Em seguida recarrega a OS: como a API mudou o status para `AGUARDANDO_PECA` numa segunda transação, a tela de trás já mostra o status novo e a entrada correspondente no histórico. No teste, conferimos pela API que o estoque da **outra** peça, que tinha saldo e foi baixada primeiro, voltou ao valor original. É a prova visível do ROLLBACK.
+
+2. *Por que o histórico começa com "Aberta" se a trigger de auditoria só registra UPDATE?*
+   A abertura é um INSERT, e a trigger `trg_auditoria_os` é `AFTER UPDATE OF status`. Então a primeira linha do histórico é montada com os dados da própria OS (`aberta_em` e `aberta_por`), e as seguintes vêm de `os_auditoria`. As OS geradas pelo seed foram inseridas já fechadas, sem passar por UPDATE. Para elas, a tela avisa que as mudanças anteriores à auditoria não foram registradas, em vez de inventar um histórico.
+
+3. *Como você testou assumir e fechar sem estragar os dados da demo?*
+   Com uma segunda instância da API, iniciada com `NODE_ENV=test` na porta 3001, que usa o banco `cmms_test`. Um script cria usuários, um equipamento, duas peças (uma com estoque baixo) e quatro OS em estados diferentes. O navegador automatizado executa o fluxo **de verdade**: assume, fecha, provoca o 409, o supervisor repõe o estoque e o técnico fecha de novo. No final o script apaga tudo e confere que o `cmms_test` ficou vazio. O banco de desenvolvimento, usado na apresentação, nunca é tocado.
+
+---
+
 ## Segurança (QSS)
 
 Registro das correções e dos controles de segurança, para o relatório do QSS.
