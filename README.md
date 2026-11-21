@@ -50,6 +50,31 @@ Usuários criados pelo seed (senha = `SEED_PASSWORD` do `.env`):
 | tecnico2@cmms.local | TECNICO |
 | supervisor@cmms.local | SUPERVISOR |
 
+## Como rodar a API
+
+```bash
+cd backend
+npm install
+npm start          # http://localhost:3000  (npm run dev reinicia ao salvar)
+npm test           # node:test + supertest; usa o banco do DATABASE_URL
+```
+
+O `JWT_SECRET` do `backend/.env` precisa ter pelo menos 32 caracteres; a API não sobe sem ele.
+Os testes criam e apagam os próprios usuários (prefixo `teste-`); só exigem os scripts
+`01..03` aplicados.
+
+### Endpoints
+
+| Método | Rota | Perfil | Descrição |
+|---|---|---|---|
+| GET | `/api/health` | público | verificação de vida |
+| POST | `/api/auth/login` | público | `{ email, senha }` → `{ token, expiraEm, usuario }` (10 tentativas/15 min) |
+| GET | `/api/auth/me` | qualquer logado | dados do usuário do token |
+
+Erros seguem sempre o formato `{ "erro": { "codigo", "mensagem", "detalhes" } }`:
+400 validação · 401 sem token/token inválido · 403 perfil sem permissão · 404 não encontrado ·
+409 estoque insuficiente ou status inválido.
+
 ## Fluxo de trabalho
 - Uma issue por funcionalidade, board no GitHub Projects (To Do / In Progress / Done).
 - Branch `feature/<issue>-<nome>`, commits pequenos, PR com `Closes #N`, revisão e merge na `main`.

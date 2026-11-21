@@ -56,3 +56,26 @@ Por isso os KPIs ficaram em FUNCTION (precisam devolver uma tabela consultável 
 
 3. *Quem garante que o alerta é resolvido no momento certo, e por que não usar outra trigger?*
    A própria procedure, depois do UPDATE, compara o estoque novo com o mínimo (`RETURNING estoque, estoque_min`). Uma trigger também funcionaria, mas deixar na procedure torna a regra explícita no fluxo de entrada e evita uma cadeia de triggers difícil de depurar. A trigger fica só com o papel de **detectar** o problema.
+
+---
+
+## Etapa 2 — Login JWT com perfis (issue #2)
+
+**O que foi feito**
+
+1. A API Express 5 está organizada em camadas: `routes` → `services` → `db`. O `app.js` monta o app sem dar `listen`, para os testes usarem o app direto com supertest.
+2. `POST /api/auth/login` confere a senha com `bcrypt.compare`. Se estiver certa, emite um JWT HS256 válido por 8h, com `sub` (id), `nome` e `perfil`. O segredo vem só do `.env`, e a API se recusa a subir sem ele ou se ele tiver menos de 32 caracteres.
+3. Os middlewares `autenticar` (401) e `exigirPerfil(...)` (403) protegem as rotas. Um middleware único transforma qualquer erro no formato `{ erro: { codigo, mensagem } }` (400/401/403/404/409/500).
+4. Segurança: `helmet` nos cabeçalhos; rate limit geral (300 req/15 min) e outro mais rígido no login (10/15 min); limite de 100 kb no corpo; queries parametrizadas.
+5. São 9 testes com `node:test` + supertest: login ok e errado, 400, 401 sem token / adulterado / expirado, 403 por perfil e 404. Cada teste cria e apaga os próprios usuários.
+
+**Perguntas prováveis**
+
+1. *Por que a resposta é igual para "e-mail não existe" e "senha errada"? E para que serve o `HASH_FALSO`?*
+   Mensagens diferentes deixariam um atacante descobrir quais e-mails estão cadastrados (enumeração de usuários). O `HASH_FALSO` faz o `bcrypt.compare` rodar mesmo quando o e-mail não existe. Assim o tempo de resposta também é parecido, e não dá para descobrir os e-mails medindo o tempo.
+
+2. *O JWT é criptografado? Um usuário pode trocar seu perfil de OPERADOR para SUPERVISOR no token?*
+   Não é criptografado, só assinado: qualquer um pode decodificar o payload em base64 e ler o perfil, por isso não colocamos dados sensíveis nele. Mas, se alguém alterar o payload, a assinatura HMAC-SHA256 deixa de bater, e o `jwt.verify` rejeita com 401. Só quem tem o `JWT_SECRET` (o servidor) consegue gerar um token válido. Além disso, fixamos `algorithms: ['HS256']` para impedir o ataque de trocar o algoritmo do cabeçalho para `none`.
+
+3. *Qual a diferença entre 401 e 403, e por que bcrypt em vez de SHA-256?*
+   401 significa "não sei quem você é" (token ausente, inválido ou expirado). 403 significa "sei quem você é, mas seu perfil não pode fazer isso". O bcrypt é lento de propósito (custo 10, cerca de 2¹⁰ rodadas) e gera um *salt* aleatório por senha. Se o banco vazar, isso torna a força bruta e as *rainbow tables* inviáveis. O SHA-256 é rápido demais e, sem salt, senhas iguais teriam o mesmo hash.
