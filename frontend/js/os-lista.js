@@ -230,4 +230,13 @@ try {
 } catch (erro) {
   mensagemDeErro(caixa, erro, 'Não foi possível carregar os equipamentos: ');
 }
+
+// Filtros vindos da URL (ex.: os.html?equipamentoId=7 a partir da tela de equipamentos).
+// Só aceita valores que existem nas opções do <select>; o resto é ignorado.
+const daUrl = new URLSearchParams(window.location.search);
+for (const nome of ['status', 'prioridade', 'equipamentoId']) {
+  const valor = daUrl.get(nome);
+  const select = filtros.elements[nome];
+  if (valor && [...select.options].some((o) => o.value === valor)) select.value = valor;
+}
 await carregarLista();
