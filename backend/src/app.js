@@ -4,6 +4,8 @@ import helmet from 'helmet';
 import { rateLimit } from 'express-rate-limit';
 import authRoutes from './routes/auth.js';
 import osRoutes from './routes/os.js';
+import equipamentosRoutes from './routes/equipamentos.js';
+import { pecasRouter, alertasRouter } from './routes/pecas.js';
 import { rotaNaoEncontrada, tratarErros } from './middlewares/erros.js';
 
 export const app = express();
@@ -28,6 +30,9 @@ app.use('/api', rateLimit({
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 app.use('/api/auth', authRoutes);
 app.use('/api/os', osRoutes);
+app.use('/api/equipamentos', equipamentosRoutes);
+app.use('/api/pecas', pecasRouter);
+app.use('/api/alertas', alertasRouter);
 
 app.use(rotaNaoEncontrada);
 app.use(tratarErros);

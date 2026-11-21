@@ -171,3 +171,26 @@ Por isso os KPIs ficaram em FUNCTION (precisam devolver uma tabela consultável 
 
 3. *Por que travar o equipamento (`FOR UPDATE`) se o fechamento só atualiza o status dele no fim?*
    Por causa da regra "só volta a OPERANDO se não houver outra OS pendente". Se duas OS do mesmo equipamento fossem fechadas ao mesmo tempo sem a trava, cada transação enxergaria a outra ainda `EM_ANDAMENTO` (sem COMMIT) e nenhuma liberaria o equipamento. Ele ficaria `PARADO` para sempre. Com a trava, a segunda espera a primeira dar COMMIT. No nível READ COMMITTED, cada comando vê os dados já confirmados, então o `NOT EXISTS` da segunda enxerga a primeira como `FECHADA` e libera o equipamento.
+
+---
+
+## Etapa 6 — Equipamentos, peças, entrada de estoque e alertas (issue #6)
+
+**O que foi feito**
+
+1. `GET /api/equipamentos` e `GET /api/pecas` servem qualquer perfil logado: o operador escolhe o equipamento ao abrir a OS, e o técnico escolhe as peças ao fechar. A lista de equipamentos traz `os_pendentes`, e a de peças traz `abaixo_minimo`, calculado no SQL.
+2. `POST /api/equipamentos` e `POST /api/pecas` são só do SUPERVISOR. Tag e código são gravados em maiúsculas. Duplicatas devolvem 409, detectadas pelo erro `23505` (*unique_violation*) do próprio banco.
+3. A peça nasce com **estoque 0**. O saldo só entra por `POST /api/pecas/:id/entrada`. Assim toda unidade em estoque tem uma movimentação `ENTRADA` rastreável.
+4. Essa rota chama a **PROCEDURE** com `CALL sp_entrada_estoque($1, $2, $3)` dentro de `transacao()`. Antes, trava a peça (`FOR UPDATE`) para devolver um 404 claro. A resposta informa quantos alertas foram resolvidos.
+5. `GET /api/alertas` (SUPERVISOR) lista os alertas pendentes criados pela trigger. São 10 testes novos, incluindo o ciclo completo: trigger cria o alerta → ele aparece na lista → a entrada o resolve → ele sai da lista.
+
+**Perguntas prováveis**
+
+1. *Por que confiar na restrição UNIQUE do banco em vez de fazer um SELECT antes para ver se a tag já existe?*
+   O "SELECT e depois INSERT" tem uma janela de corrida: dois supervisores cadastrando a mesma tag ao mesmo tempo passariam os dois no SELECT. A restrição `UNIQUE` é garantida pelo índice do banco de forma atômica. A API só traduz o erro `23505` para um 409 com mensagem clara. A regra fica num lugar só, no banco, e vale para qualquer cliente, inclusive o `psql`.
+
+2. *Por que a peça é cadastrada com estoque 0 e não com uma quantidade inicial?*
+   Para manter a rastreabilidade: o estoque de uma peça deve ser sempre igual a Σ ENTRADAS − Σ SAÍDAS em `movimentacoes`. Se o cadastro aceitasse um estoque inicial direto, essa quantidade apareceria "do nada", sem movimentação nem usuário responsável. Usando a procedure de entrada, a regra é a mesma para a primeira compra e para as reposições.
+
+3. *A rota de entrada chama uma PROCEDURE: como a API sabe o que aconteceu, se ela não devolve linhas?*
+   A procedure faz o trabalho (UPDATE, INSERT, resolver alertas), e a API consulta o resultado **na mesma transação**: conta os alertas pendentes antes e depois do `CALL`, e lê a peça atualizada no fim. É a divisão típica: a procedure executa a ação, e as consultas (ou funções) leem o estado. Como a procedure não faz COMMIT própria, tudo é confirmado de uma vez pelo `transacao()`.

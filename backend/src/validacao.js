@@ -19,9 +19,12 @@ export function criarValidador() {
       return n;
     },
 
-    // Inteiro entre min e max; ausente => padrao
+    // Inteiro entre min e max; ausente => padrao (sem padrao, o campo é obrigatório)
     inteiroEntre(valor, campo, min, max, padrao) {
-      if (valor === undefined || valor === null || valor === '') return padrao;
+      if (valor === undefined || valor === null || valor === '') {
+        if (padrao === undefined) problemas.push(`${campo} é obrigatório`);
+        return padrao;
+      }
       const n = Number(valor);
       if (!Number.isInteger(n) || n < min || n > max) {
         problemas.push(`${campo} deve ser um inteiro entre ${min} e ${max}`);
