@@ -90,7 +90,9 @@ async function carregar() {
     // sugestões de linha de produção no cadastro
     const lista = $('linhas-existentes');
     limpar(lista);
-    preencherSelect(lista, [...new Set(equipamentos.map((e) => e.linha))].sort().map((l) => [l, l]));
+    // localeCompare em pt-BR: ordena acentos corretamente ("Usinagem" depois de "Estamparia")
+    const nomesLinhas = [...new Set(equipamentos.map((e) => e.linha))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    preencherSelect(lista, nomesLinhas.map((l) => [l, l]));
   } catch (erro) {
     limpar(linhas);
     erroParaTela(caixa, erro, 'Não foi possível carregar os equipamentos: ');
