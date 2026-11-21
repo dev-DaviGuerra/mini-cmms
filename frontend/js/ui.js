@@ -35,14 +35,16 @@ export const ROTULOS_TIPO = Object.freeze({ CORRETIVA: 'Corretiva', PREVENTIVA: 
 
 const ROTULOS_PERFIL = Object.freeze({ OPERADOR: 'Operador', TECNICO: 'Técnico', SUPERVISOR: 'Supervisor' });
 
-const classeDe = (valor) => String(valor).toLowerCase().replaceAll('_', '-');
+// 'AGUARDANDO_PECA' -> 'aguardando-peca' (nome de classe CSS)
+export const classeDe = (valor) => String(valor).toLowerCase().replaceAll('_', '-');
 
-export function badgeStatus(status) {
-  return el('span', { classe: `badge status-${classeDe(status)}`, texto: ROTULOS_STATUS[status] ?? status });
+// Status em semáforo: ponto colorido (CSS) + texto. A cor nunca é a única informação.
+export function marcaStatus(status) {
+  return el('span', { classe: `status ${classeDe(status)}`, texto: ROTULOS_STATUS[status] ?? status });
 }
 
-export function badgePrioridade(prioridade) {
-  return el('span', { classe: `badge prioridade-${classeDe(prioridade)}`, texto: ROTULOS_PRIORIDADE[prioridade] ?? prioridade });
+export function marcaPrioridade(prioridade) {
+  return el('span', { classe: `prioridade ${classeDe(prioridade)}`, texto: ROTULOS_PRIORIDADE[prioridade] ?? prioridade });
 }
 
 export function formatarDataHora(iso) {
@@ -50,12 +52,20 @@ export function formatarDataHora(iso) {
   return new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
 }
 
-// Preenche um <select> com pares [valor, rótulo], mantendo a primeira opção (ex.: "Todos")
+// Versão compacta para tabelas: 21/11/26 13:17
+export function formatarDataHoraCurta(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleString('pt-BR', {
+    day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit',
+  }).replace(',', '');
+}
+
+// Preenche um <select> com pares [valor, rótulo], mantendo as opções que já existem
 export function preencherSelect(select, pares) {
   for (const [valor, rotulo] of pares) select.append(el('option', { texto: rotulo, attrs: { value: valor } }));
 }
 
-// Caixa de mensagem (erro/sucesso). detalhes: lista de textos (ex.: problemas de validação)
+// Caixa de mensagem (erro/sucesso/aviso/info). detalhes: lista de textos
 export function mostrarMensagem(caixa, texto, tipo = 'erro', detalhes = null) {
   limpar(caixa);
   caixa.className = `alerta alerta-${tipo}`;
@@ -71,26 +81,70 @@ export function esconderMensagem(caixa) {
   limpar(caixa);
 }
 
-// Cabeçalho comum: marca, navegação, usuário logado e botão Sair
-export function montarCabecalho(usuario, paginaAtual) {
-  const links = [['os', 'os.html', 'Ordens de serviço']];
+// Linhas "fantasma" enquanto a tabela carrega. larguras: classes de .skeleton por coluna
+export function linhasSkeleton(quantidade, larguras) {
+  return Array.from({ length: quantidade }, () => el('tr', { attrs: { 'aria-hidden': 'true' } },
+    larguras.map((largura) => el('td', { classe: largura.coluna ?? '' }, [el('span', { classe: `skeleton ${largura.tamanho}` })]))));
+}
 
-  const nav = el('nav', { classe: 'navegacao', attrs: { 'aria-label': 'Principal' } }, links.map(([id, href, texto]) => el('a', {
-    texto,
-    classe: id === paginaAtual ? 'ativo' : '',
-    attrs: { href, ...(id === paginaAtual ? { 'aria-current': 'page' } : {}) },
-  })));
+// Bloco de "nada encontrado", com uma ação opcional
+export function estadoVazio({ titulo, texto, acao }) {
+  const filhos = [
+    el('span', { classe: 'estado-vazio-icone', attrs: { 'aria-hidden': 'true' } }),
+    el('h2', { texto: titulo }),
+    el('p', { texto }),
+  ];
+  if (acao) {
+    const botao = el('button', { classe: 'botao secundario', texto: acao.texto, attrs: { type: 'button' } });
+    botao.addEventListener('click', acao.aoClicar);
+    filhos.push(botao);
+  }
+  return el('div', { classe: 'estado-vazio' }, filhos);
+}
 
-  const botaoSair = el('button', { classe: 'botao fantasma', texto: 'Sair', attrs: { type: 'button' } });
-  botaoSair.addEventListener('click', () => sair('saiu'));
+// Navegação do menu lateral. Telas ainda não feitas aparecem desabilitadas.
+const ITENS_MENU = [
+  { id: 'os', href: 'os.html', texto: 'Ordens de serviço' },
+  { id: 'equipamentos', texto: 'Equipamentos' },
+  { id: 'estoque', texto: 'Estoque' },
+  { id: 'dashboard', texto: 'Dashboard' },
+];
 
-  const quem = el('div', { classe: 'usuario' }, [
-    el('span', { classe: 'usuario-nome', texto: usuario.nome }),
-    el('span', { classe: 'badge perfil', texto: ROTULOS_PERFIL[usuario.perfil] ?? usuario.perfil }),
-    botaoSair,
+// Menu lateral: logo, navegação e, no rodapé, usuário + perfil + Sair
+export function montarLayout(usuario, paginaAtual) {
+  const marca = el('a', { classe: 'menu-marca', attrs: { href: 'os.html' } }, [
+    el('img', { attrs: { src: 'img/logo.svg', alt: '', width: 30, height: 30 } }),
+    el('span', { texto: 'Mini-CMMS' }),
   ]);
 
-  const cabecalho = document.getElementById('cabecalho');
-  limpar(cabecalho);
-  cabecalho.append(el('a', { classe: 'marca', texto: 'Mini-CMMS', attrs: { href: 'os.html' } }), nav, quem);
+  const itens = ITENS_MENU.map((item) => {
+    if (!item.href) {
+      return el('span', { classe: 'menu-item desabilitado', attrs: { 'aria-disabled': 'true' } }, [
+        el('span', { texto: item.texto }),
+        el('span', { classe: 'em-breve', texto: 'em breve' }),
+      ]);
+    }
+    const ativo = item.id === paginaAtual;
+    return el('a', {
+      classe: `menu-item${ativo ? ' ativo' : ''}`,
+      attrs: { href: item.href, ...(ativo ? { 'aria-current': 'page' } : {}) },
+    }, [el('span', { texto: item.texto })]);
+  });
+
+  const botaoSair = el('button', { classe: 'botao no-escuro', texto: 'Sair', attrs: { type: 'button' } });
+  botaoSair.addEventListener('click', () => sair('saiu'));
+
+  const menu = document.getElementById('menu');
+  limpar(menu);
+  menu.append(
+    marca,
+    el('div', { classe: 'menu-faixa', attrs: { 'aria-hidden': 'true' } }),
+    el('p', { classe: 'menu-titulo', texto: 'Operação', attrs: { id: 'titulo-menu' } }),
+    el('nav', { classe: 'menu-nav', attrs: { 'aria-labelledby': 'titulo-menu' } }, itens),
+    el('div', { classe: 'menu-rodape' }, [
+      el('span', { classe: 'menu-usuario-nome', texto: usuario.nome }),
+      el('span', { classe: 'menu-usuario-perfil', texto: ROTULOS_PERFIL[usuario.perfil] ?? usuario.perfil }),
+      botaoSair,
+    ]),
+  );
 }
