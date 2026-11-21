@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Equipamentos · Mini-CMMS</title>
+  <link rel="icon" href="img/logo.svg" type="image/svg+xml">
+  <link rel="preload" href="fontes/ibm-plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fontes/ibm-plex-mono-600.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="css/estilo.css">
+  <script type="module" src="js/equipamentos.js"></script>
+</head>
+<body class="app">
+  <aside id="menu" class="menu-lateral" aria-label="Menu principal"></aside>
+
+  <main class="conteudo">
+    <header class="cabecalho-pagina">
+      <h1>Equipamentos</h1>
+      <button id="botao-novo" type="button" class="botao primario" hidden
+              aria-haspopup="dialog" aria-controls="drawer-equipamento">+ Novo equipamento</button>
+    </header>
+
+    <!-- resumo: total, operando e parados -->
+    <section class="indicadores indicadores-3" aria-label="Resumo dos equipamentos">
+      <div class="indicador">
+        <span class="indicador-rotulo">Equipamentos</span>
+        <span class="indicador-valor" id="resumo-total"><span class="skeleton valor"></span></span>
+        <span class="indicador-dica">cadastrados</span>
+      </div>
+      <div class="indicador operando">
+        <span class="indicador-rotulo status operando">Operando</span>
+        <span class="indicador-valor" id="resumo-operando"><span class="skeleton valor"></span></span>
+        <span class="indicador-dica">sem OS pendente</span>
+      </div>
+      <div class="indicador parados" id="card-parados">
+        <span class="indicador-rotulo status critico">Parados</span>
+        <span class="indicador-valor" id="resumo-parados"><span class="skeleton valor"></span></span>
+        <span class="indicador-dica">com OS aberta, em andamento ou aguardando peça</span>
+      </div>
+    </section>
+
+    <div id="mensagem" role="status" hidden></div>
+
+    <section class="painel" aria-labelledby="titulo-lista">
+      <h2 id="titulo-lista" class="so-leitor-de-tela">Lista de equipamentos</h2>
+      <div class="painel-cabecalho">
+        <form id="filtros" class="filtros" novalidate>
+          <div class="campo largo">
+            <label for="filtro-busca">Buscar</label>
+            <input id="filtro-busca" name="busca" type="search" placeholder="Tag, nome ou linha" autocomplete="off">
+          </div>
+          <div class="campo">
+            <label for="filtro-status">Status</label>
+            <select id="filtro-status" name="status">
+              <option value="">Todos</option>
+              <option value="OPERANDO">Operando</option>
+              <option value="PARADO">Parado</option>
+            </select>
+          </div>
+        </form>
+      </div>
+
+      <div class="tabela-rolagem">
+        <table class="tabela">
+          <thead>
+            <tr>
+              <th scope="col">Tag</th>
+              <th scope="col">Nome</th>
+              <th scope="col">Linha</th>
+              <th scope="col">Criticidade</th>
+              <th scope="col">Status</th>
+              <th scope="col" class="numero">OS pendentes</th>
+            </tr>
+          </thead>
+          <tbody id="linhas"></tbody>
+        </table>
+      </div>
+      <div class="rodape-tabela">
+        <span id="contagem" aria-live="polite"></span>
+      </div>
+    </section>
+  </main>
+
+  <!-- Drawer "Novo equipamento": só SUPERVISOR (a API também valida) -->
+  <aside id="drawer-equipamento" class="drawer" role="dialog" aria-modal="true" aria-labelledby="titulo-equipamento" inert>
+    <form id="form-equipamento" class="drawer-form" novalidate>
+      <div class="drawer-cabecalho">
+        <h2 id="titulo-equipamento">Novo equipamento</h2>
+        <button type="button" class="botao secundario icone" data-fechar-drawer aria-label="Fechar painel">×</button>
+      </div>
+      <div class="drawer-corpo">
+        <div id="mensagem-equipamento" role="alert" hidden></div>
+        <div class="linha-campos">
+          <div class="campo">
+            <label for="equip-tag">Tag</label>
+            <input id="equip-tag" name="tag" maxlength="20" autocomplete="off" required placeholder="Ex.: R-04">
+          </div>
+          <div class="campo">
+            <label for="equip-criticidade">Criticidade</label>
+            <select id="equip-criticidade" name="criticidade" required>
+              <option value="">Selecione…</option>
+              <option value="A">A — crítica</option>
+              <option value="B">B — importante</option>
+              <option value="C">C — baixa</option>
+            </select>
+          </div>
+        </div>
+        <span class="ajuda">A tag é única e é gravada em maiúsculas. Criticidade A: parada afeta a produção inteira.</span>
+        <div class="campo">
+          <label for="equip-nome">Nome</label>
+          <input id="equip-nome" name="nome" maxlength="100" autocomplete="off" required placeholder="Ex.: Robô de solda 04">
+        </div>
+        <div class="campo">
+          <label for="equip-linha">Linha de produção</label>
+          <input id="equip-linha" name="linha" list="linhas-existentes" maxlength="50" autocomplete="off" required>
+          <datalist id="linhas-existentes"></datalist>
+          <span class="ajuda">Escolha uma linha existente ou digite uma nova.</span>
+        </div>
+      </div>
+      <div class="drawer-rodape">
+        <button type="button" class="botao secundario" data-fechar-drawer>Cancelar</button>
+        <button type="submit" class="botao primario">Cadastrar</button>
+      </div>
+    </form>
+  </aside>
+  <div id="fundo-drawer" class="fundo-drawer"></div>
+</body>
+</html>
