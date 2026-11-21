@@ -88,7 +88,7 @@ async function carregarLista() {
 
 function recarregarDoInicio() {
   offset = 0;
-  carregarLista();
+  return carregarLista();
 }
 
 // ---- abrir OS (OPERADOR e SUPERVISOR) ---------------------------------------------
@@ -133,7 +133,7 @@ formNova.addEventListener('submit', async (evento) => {
     formNova.reset();
     secaoNova.hidden = true;
     await carregarEquipamentos();
-    recarregarDoInicio();
+    await recarregarDoInicio();
   } catch (erro) {
     erroParaTela(erro, 'A OS não foi aberta: ');
   } finally {
@@ -142,12 +142,21 @@ formNova.addEventListener('submit', async (evento) => {
 });
 
 // ---- eventos dos filtros e da paginação -------------------------------------------
-filtros.addEventListener('change', recarregarDoInicio);
-filtros.addEventListener('submit', (e) => { e.preventDefault(); recarregarDoInicio(); });
-$('botao-limpar').addEventListener('click', () => { filtros.reset(); recarregarDoInicio(); });
-$('botao-atualizar').addEventListener('click', () => carregarLista());
-$('botao-anterior').addEventListener('click', () => { offset = Math.max(0, offset - POR_PAGINA); carregarLista(); });
-$('botao-proxima').addEventListener('click', () => { if (offset + POR_PAGINA < total) { offset += POR_PAGINA; carregarLista(); } });
+// carregarLista() trata os próprios erros (mostra a mensagem na tela) e nunca rejeita;
+// por isso, nos tratadores de evento, a promessa é ignorada de forma explícita com "void".
+filtros.addEventListener('change', () => { void recarregarDoInicio(); });
+filtros.addEventListener('submit', (e) => { e.preventDefault(); void recarregarDoInicio(); });
+$('botao-limpar').addEventListener('click', () => { filtros.reset(); void recarregarDoInicio(); });
+$('botao-atualizar').addEventListener('click', () => { void carregarLista(); });
+$('botao-anterior').addEventListener('click', () => {
+  offset = Math.max(0, offset - POR_PAGINA);
+  void carregarLista();
+});
+$('botao-proxima').addEventListener('click', () => {
+  if (offset + POR_PAGINA >= total) return;
+  offset += POR_PAGINA;
+  void carregarLista();
+});
 
 // ---- início ----------------------------------------------------------------------
 preencherSelect($('filtro-status'), Object.entries(ROTULOS_STATUS));
