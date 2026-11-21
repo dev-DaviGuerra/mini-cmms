@@ -10,6 +10,8 @@ Referência completa: `Mini-CMMS_Projeto_AVD2.pdf` (local, fora do git).
   movimentacoes, alertas_estoque, os_auditoria.
 - Triggers `trg_estoque_minimo` e `trg_auditoria_os`.
 - Função `sp_kpis_equipamento(data_ini, data_fim)` (MTTR, MTBF, disponibilidade, custo).
+- Procedure `sp_entrada_estoque(p_peca_id, p_qtd, p_usuario_id)` (CALL): soma estoque, grava
+  ENTRADA e resolve alertas quando o estoque volta a ficar >= mínimo.
 - 3 consultas BD2 em `database/04_consultas_bd2.sql`.
 - `database/seed.js`: 10 equipamentos, 30 peças, ~200 OS fictícias em 90 dias.
 
@@ -38,8 +40,12 @@ deploy, SonarCloud, artigo, slides.
 - Status da OS: ABERTA, EM_ANDAMENTO, AGUARDANDO_PECA, FECHADA, CANCELADA.
 - MTTR medido de `aberta_em` até `fechada_em` (tempo de equipamento parado), só OS CORRETIVAS fechadas.
 - Custo da hora técnica: parâmetro `p_custo_hora` da função de KPIs (padrão R$ 80,00).
-- Usuário da auditoria: a API faz `SET LOCAL app.usuario_id = <id>` na transação; a trigger lê
-  com `current_setting('app.usuario_id', true)`.
+- Usuário da auditoria: a trigger lê `current_setting('app.usuario_id', true)`.
+- **Regra obrigatória da API:** TODA mudança de status de OS (abrir→assumir, assumir, fechar,
+  aguardar peça, cancelar) roda numa transação (`BEGIN` … `COMMIT`/`ROLLBACK`) e executa
+  `SET LOCAL app.usuario_id = '<id do JWT>'` **antes** do `UPDATE` do status. Vale também para
+  assumir a OS, não só para fechar. Sem isso, a auditoria grava `usuario_id` NULL.
+  (`SET LOCAL` não aceita parâmetro `$1`; use `SELECT set_config('app.usuario_id', $1, true)`.)
 - Todos os dados são fictícios (repositório público).
 
 ## Comandos
