@@ -41,6 +41,9 @@ jobs:
       # localhost => o configConexao() desliga o SSL; DATABASE_URL não é definido, então
       # não há como os testes tocarem outro banco.
       DATABASE_URL_TEST: postgres://postgres:postgres@localhost:5432/cmms_test
+      # Os testes fazem mais de 10 logins pelo mesmo IP em 15 min; o padrão de produção
+      # (10) continua valendo fora daqui. É o mesmo ajuste do .env de desenvolvimento.
+      LOGIN_RATE_LIMIT_MAX: 100
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
     steps:
