@@ -1,0 +1,26 @@
+# Dependabot: abre PRs semanais com atualizações de segurança e de versão.
+# Atualizações menores e de correção vêm agrupadas num PR só por pasta, para não lotar a fila.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directories:
+      - /backend
+      - /database
+      - /frontend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      menores:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: "chore(deps)"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "chore(ci)"
