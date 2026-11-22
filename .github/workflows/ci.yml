@@ -1,0 +1,86 @@
+# CI do Mini-CMMS: a cada push e pull request, roda os testes do backend num PostgreSQL
+# descartável (service container do próprio Actions, NUNCA o Neon), mede a cobertura com
+# c8 e envia o resultado ao SonarCloud.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+# Privilégio mínimo: o GITHUB_TOKEN só lê o repositório.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  testes:
+    name: Testes + cobertura + SonarCloud
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres # senha de um banco descartável, que só existe durante o job
+          POSTGRES_DB: cmms_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      NODE_ENV: test
+      # localhost => o configConexao() desliga o SSL; DATABASE_URL não é definido, então
+      # não há como os testes tocarem outro banco.
+      DATABASE_URL_TEST: postgres://postgres:postgres@localhost:5432/cmms_test
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # histórico completo: o Sonar usa o blame para saber o que é código novo
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: JWT_SECRET aleatório só para este job
+        run: echo "JWT_SECRET=$(openssl rand -hex 48)" >> "$GITHUB_ENV"
+
+      - name: Aplicar o banco (01, 02, 03 e 05)
+        run: |
+          psql "$DATABASE_URL_TEST" -v ON_ERROR_STOP=1 \
+            -f database/01_schema.sql \
+            -f database/02_triggers.sql \
+            -f database/03_procedures.sql \
+            -f database/05_usuarios_ativo.sql
+
+      - name: Instalar dependências do backend
+        working-directory: backend
+        run: npm ci
+
+      - name: npm audit (falha com vulnerabilidade alta ou crítica)
+        working-directory: backend
+        run: npm audit --audit-level=high
+
+      - name: Testes com cobertura (c8 => backend/coverage/lcov.info)
+        working-directory: backend
+        run: npm run test:cobertura
+
+      - name: Conferir as consultas BD2 no banco de teste
+        run: psql "$DATABASE_URL_TEST" -v ON_ERROR_STOP=1 -q -o /dev/null -f database/04_consultas_bd2.sql
+
+      # Sem o secret (ex.: PR vindo de fork), os testes rodam e só a análise é pulada.
+      - name: Análise SonarCloud
+        if: env.SONAR_TOKEN != ''
+        uses: SonarSource/sonarqube-scan-action@v8
