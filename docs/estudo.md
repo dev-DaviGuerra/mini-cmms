@@ -375,8 +375,9 @@ O Mini-CMMS é um sistema **interno** de uma fábrica, não um serviço público
    - "Agora" (`/api/kpis/resumo`): cards que levam às telas filtradas;
    - "No período" (30, 90 ou 180 dias, via `sp_kpis_equipamento`): falhas, MTTR médio ponderado (tempo total de reparo ÷ total de falhas), disponibilidade média e custo de manutenção.
 2. **Gráficos**, com o Chart.js servido localmente em `vendor/` (build UMD, sem `eval`, compatível com a CSP sem `unsafe-inline`):
-   - MTTR por equipamento em barras, com a linha da média;
-   - disponibilidade em **pontos**;
+   - MTTR por equipamento em barras **horizontais, ordenadas do maior para o menor**, com a linha da média ponderada. Na horizontal, as tags ficam legíveis sem girar o texto em 1366 px, e a ordem já mostra o ranking;
+   - disponibilidade em **pontos**, também horizontal e ordenada do menos para o mais disponível;
+   - na tabela "MTTR acima da média", a tela explica que a consulta BD2 compara com a **média simples** dos MTTR (`AVG` na subquery). O card "MTTR médio" é **ponderado pelas falhas** (tempo total de reparo ÷ total de falhas), e por isso os dois valores diferem um pouco;
    - Pareto: barras com a % de cada causa e linha com a % acumulada, no **mesmo eixo** de 0 a 100%, com a linha de corte de 80%;
    - top 5 peças em barras horizontais;
    - tabela "MTTR acima da média".
