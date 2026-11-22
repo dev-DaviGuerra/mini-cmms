@@ -38,6 +38,9 @@ service container (nunca o Neon na CI), `npm audit --audit-level=high`, `npm run
 Automatic Analysis fica desligada). Dependabot em `.github/dependabot.yml`. Relatório em
 `docs/qss-relatorio.md`. Na CI, `LOGIN_RATE_LIMIT_MAX=100` (os testes fazem mais de 10 logins).
 Não usar `// NOSONAR` nem ignorar regra sem justificativa escrita no código ou no properties.
+No novo escopo do SonarCloud, `sonar.sources`/`sonar.tests` não têm efeito: o escopo se ajusta
+só com `sonar.exclusions` e `sonar.coverage.exclusions`. Actions do workflow fixadas por SHA
+completo (S7637) e `npm ci --ignore-scripts` (S6505).
 
 Fora do escopo (só se o usuário pedir): cancelamento de OS, entrada de nota, cadastro aberto
 (autocadastro) de usuários, deploy, artigo, slides.

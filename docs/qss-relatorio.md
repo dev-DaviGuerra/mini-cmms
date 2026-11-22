@@ -45,6 +45,8 @@ push / pull request
 | 8 | S9383 | Bug | `database/seed.js` | `main()` chamada sem `await` | `await main();` (top-level await, ES Modules) | #12 |
 | 9 | S7767 | Code smell | `database/seed.js` | "use `Math.trunc` em vez de `\| 0`" | **Não aplicável**: no gerador mulberry32 o `\| 0` faz o *overflow* de 32 bits que o algoritmo exige, e `Math.trunc` mudaria a sequência. Marcado com `// NOSONAR` e justificativa no código | #12 |
 | 10 | plsql:CharVarchar | Bug | `database/01_schema.sql` | "use VARCHAR2 em vez de CHAR" | **Falso positivo**: regra do Oracle; o PostgreSQL não tem VARCHAR2. Ignorada só para `database/**/*.sql` em `sonar-project.properties`, com o motivo | #12 |
+| 11 | githubactions:S6505 | Vulnerabilidade | `.github/workflows/ci.yml` | `npm ci` sem `--ignore-scripts`: um pacote comprometido poderia rodar código na instalação (cadeia de suprimentos) | `npm ci --ignore-scripts` (o bcrypt 6 já traz o binário pronto, em `prebuilds/`) | #12 |
+| 12 | githubactions:S7637 | Vulnerabilidade | `.github/workflows/ci.yml` | action de terceiro referenciada por tag (`@v8`), que pode ser movida para outro código | todas as actions fixadas pelo **SHA completo** do commit, com a versão em comentário; o Dependabot atualiza os SHAs | #12 |
 
 A coluna PR é o pull request em que a correção entrou (o #12 é este). O detalhamento das correções 1 e 2 (medições, risco real e perguntas de banca) está em
 `docs/estudo.md`, seção "Segurança (QSS)".
@@ -90,6 +92,8 @@ do dono do banco.
     `USUARIO:SENHA@HOST`);
   - nenhum host, senha ou identificador do Neon, nenhum token do GitHub/Sonar e nenhuma chave
     privada.
+- **SonarCloud pela CI:** a análise do próprio workflow apontou `npm ci` sem `--ignore-scripts` e
+  actions sem SHA fixo (corrigidos). O `JWT_SECRET` gerado na CI é mascarado no log (`::add-mask::`).
 - **A CI encontrou um problema real:** os testes só passavam na máquina de desenvolvimento,
   porque o `.env` local tem `LOGIN_RATE_LIMIT_MAX=100`. Num ambiente limpo, com o padrão de
   produção (10), o 11º login dos testes recebia 429. A CI agora define o mesmo ajuste de forma
@@ -108,12 +112,27 @@ a cada push.
 | Ramos (branches) | **90,7%** (321/354) |
 | Funções | **100%** (65/65) |
 
-**Cobertura no SonarCloud:** _preencher após a primeira análise pela CI._
+**Cobertura no SonarCloud** (primeira análise pela CI, branch da #12, 22/11/2026):
+
+| Métrica (SonarCloud) | Antes (Automatic Analysis) | Depois (análise pela CI) |
+|---|---|---|
+| Cobertura | 0,0% (não era enviada) | **96,8%** |
+| Cobertura de linhas | — | **98,4%** (1338 linhas a cobrir) |
+| Cobertura de ramos | — | **90,9%** |
+| Cobertura do código novo | — | **100%** |
+| Bugs / vulnerabilidades / code smells | 2 / 1 / 1 | **0 / 0 / 0** |
+| Security hotspots | 0 | 0 |
+| Quality Gate | — | **Passed** |
+
+Na primeira análise pela CI, o Gate reprovou: o arquivo de teste `auth.test.js` entrou como código
+sem cobertura, e o Sonar apontou as duas vulnerabilidades do próprio workflow (linhas 11 e 12 da
+tabela da seção 2). Os dois problemas foram corrigidos antes do PR.
 
 O que entra na métrica: o código da API (`backend/src`). O front (testado no navegador com Edge
 headless) e o `database/seed.js` (script de carga) **continuam analisados** para bugs,
 vulnerabilidades e code smells, mas ficam fora da métrica de cobertura
-(`sonar.coverage.exclusions`), porque não têm testes de unidade automatizados. O `server.js`
+(`sonar.coverage.exclusions`), porque não têm testes de unidade automatizados. Os arquivos de
+`backend/tests/` também ficam fora, porque são os próprios testes. O `server.js`
 (só o `app.listen`) também fica fora do c8.
 
 ---

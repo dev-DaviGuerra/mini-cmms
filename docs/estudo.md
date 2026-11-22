@@ -403,9 +403,9 @@ O Mini-CMMS é um sistema **interno** de uma fábrica, não um serviço público
 **O que foi feito**
 
 1. **CI no GitHub Actions** (`.github/workflows/ci.yml`): a cada push e PR, sobe um PostgreSQL 18 em *service container*, aplica os scripts 01, 02, 03 e 05, roda `npm audit`, os 81 testes e as consultas BD2. O Neon nunca é usado na CI.
-2. **Cobertura com c8** (`npm run test:cobertura`): 98,5% das linhas e 90,7% dos ramos de `backend/src`. O `lcov.info` vai para o SonarCloud, que passou da *Automatic Analysis* para a análise pela CI (a automática não recebe cobertura, por isso mostrava 0,0%).
+2. **Cobertura com c8** (`npm run test:cobertura`): 98,5% das linhas e 90,7% dos ramos de `backend/src`. O `lcov.info` vai para o SonarCloud, que passou da *Automatic Analysis* para a análise pela CI (a automática não recebe cobertura, por isso mostrava 0,0%). No Sonar a cobertura ficou em **96,8%** e o Quality Gate passou.
 3. **Issues abertas no Sonar corrigidas:** log injection no erro 500 (S5145), `main()` sem `await` no seed (S9383); o `| 0` do mulberry32 (S7767) e o `CHAR` do schema (regra do Oracle) foram justificados como não aplicáveis.
-4. **Dependências e segredos:** `npm audit` zerado nos três pacotes (com `overrides` para `glob`/`minimatch`), Dependabot semanal para npm e Actions, e varredura do histórico do git sem nenhum segredo.
+4. **Dependências e segredos:** actions fixadas por SHA e `npm ci --ignore-scripts` (apontados pelo próprio Sonar no workflow), `npm audit` zerado nos três pacotes (com `overrides` para `glob`/`minimatch`), Dependabot semanal para npm e Actions, e varredura do histórico do git sem nenhum segredo.
 5. A CI achou um problema real: os testes dependiam do `LOGIN_RATE_LIMIT_MAX=100` do `.env` local. Tudo está consolidado em `docs/qss-relatorio.md`.
 
 **Perguntas prováveis**
