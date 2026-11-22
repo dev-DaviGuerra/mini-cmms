@@ -5,6 +5,11 @@
 // 404 não encontrado · 409 estoque insuficiente ou status inválido · 500 inesperado
 import { ErroApi, ErroNaoEncontrado } from '../errors.js';
 
+// Troca CR, LF e os separadores de linha Unicode por "_" antes de gravar no log
+export function semQuebras(texto) {
+  return String(texto).replaceAll(/[\r\n\u2028\u2029]/g, '_');
+}
+
 export function rotaNaoEncontrada(req, _res, next) {
   next(new ErroNaoEncontrado(`Rota ${req.method} ${req.path} não encontrada`));
 }
@@ -24,8 +29,10 @@ export function tratarErros(err, req, res, _next) {
     });
   }
 
-  // Erro inesperado: registra no servidor, mas não expõe detalhes internos ao cliente
-  console.error(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`, err);
+  // Erro inesperado: registra no servidor, mas não expõe detalhes internos ao cliente.
+  // A URL vem do cliente: sem as quebras de linha, ninguém forja linhas falsas no log
+  // (log injection, regra Sonar S5145).
+  console.error(`[${new Date().toISOString()}] ${semQuebras(req.method)} ${semQuebras(req.originalUrl)}`, err);
   return res.status(500).json({
     erro: { codigo: 'ERRO_INTERNO', mensagem: 'Erro interno do servidor' },
   });

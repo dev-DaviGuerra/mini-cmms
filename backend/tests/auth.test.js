@@ -7,7 +7,7 @@ import { app } from '../src/app.js';
 import { config } from '../src/config.js';
 import { autenticar } from '../src/middlewares/auth.js';
 import { exigirPerfil } from '../src/middlewares/perfil.js';
-import { tratarErros } from '../src/middlewares/erros.js';
+import { tratarErros, semQuebras } from '../src/middlewares/erros.js';
 import { criarUsuarios, removerUsuarios, encerrar, SENHA_TESTE } from './helpers.js';
 
 let usuarios;
@@ -113,5 +113,33 @@ describe('autenticação e autorização', () => {
     const res = await request(app).get('/api/nao-existe');
     assert.equal(res.status, 404);
     assert.equal(res.body.erro.codigo, 'NAO_ENCONTRADO');
+  });
+});
+
+describe('erro inesperado (500)', () => {
+  test('responde genérico e grava no log a URL sem quebras de linha (S5145)', async () => {
+    const appTeste = express();
+    appTeste.get('/falha', () => { throw new Error('detalhe interno'); });
+    appTeste.use(tratarErros);
+
+    const linhas = [];
+    const original = console.error;
+    console.error = (...args) => linhas.push(args[0]);
+    let res;
+    try {
+      res = await request(appTeste).get('/falha?x=a%0D%0A[falso]%20LOGIN%20OK');
+    } finally {
+      console.error = original;
+    }
+
+    assert.equal(res.status, 500);
+    assert.deepEqual(res.body, { erro: { codigo: 'ERRO_INTERNO', mensagem: 'Erro interno do servidor' } });
+    assert.equal(linhas.length, 1);
+    assert.doesNotMatch(linhas[0], /[\r\n]/);
+  });
+
+  test('semQuebras troca CR, LF e separadores Unicode', () => {
+    assert.equal(semQuebras('a\r\nb\u2028c\u2029d'), 'a__b_c_d');
+    assert.equal(semQuebras(42), '42');
   });
 });
