@@ -1,5 +1,9 @@
 # Mini-CMMS
 
+[![CI](https://github.com/dev-DaviGuerra/mini-cmms/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/dev-DaviGuerra/mini-cmms/actions/workflows/ci.yml)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=dev-DaviGuerra_mini-cmms&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=dev-DaviGuerra_mini-cmms)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=dev-DaviGuerra_mini-cmms&metric=coverage)](https://sonarcloud.io/summary/new_code?id=dev-DaviGuerra_mini-cmms)
+
 Sistema de Ordens de Manutenção e Estoque de Peças — projeto da AVD2 (Módulo IV).
 
 Permite cadastrar equipamentos, abrir ordens de serviço (OS), fechá-las consumindo peças do
@@ -17,7 +21,8 @@ backend/     API Express (src/routes, src/middlewares, src/services) e tests/
 frontend/    telas HTML + js/ + css/
 database/    01_schema.sql, 02_triggers.sql, 03_procedures.sql, 04_consultas_bd2.sql,
              05_usuarios_ativo.sql, seed.js
-docs/        estudo.md (resumo de cada etapa + perguntas de banca)
+docs/        estudo.md (resumo de cada etapa + perguntas de banca), qss-relatorio.md
+.github/     workflows/ci.yml (CI + SonarCloud), dependabot.yml
 ```
 
 ## Banco de dados
@@ -171,6 +176,21 @@ Segurança no front:
 - sem CDN: fontes, logo e scripts são servidos pelo próprio site;
 - em desenvolvimento, `package.json`, `scripts/` e `node_modules/` do front não são servidos.
   No NGINX do deploy, bloquear os mesmos caminhos.
+
+## Qualidade e segurança (CI)
+
+- **GitHub Actions** (`.github/workflows/ci.yml`), a cada push e pull request: sobe um
+  PostgreSQL 18 em *service container* (descartável, nunca o Neon), aplica os scripts 01, 02, 03
+  e 05, roda `npm audit --audit-level=high`, os testes com cobertura e as consultas BD2, e envia
+  o resultado ao **SonarCloud**.
+- **Cobertura:** `cd backend && npm run test:cobertura` (c8; gera `backend/coverage/lcov.info`
+  e um resumo no terminal). Usa o mesmo `DATABASE_URL_TEST` do `npm test`.
+- **SonarCloud:** análise pela CI (`sonar-project.properties`), não pela *Automatic Analysis*.
+  O token fica só no secret `SONAR_TOKEN` do repositório.
+- **Dependabot** (`.github/dependabot.yml`): PRs semanais para npm (`backend`, `database`,
+  `frontend`) e GitHub Actions.
+- Relatório completo do QSS (correções do Sonar, controles de segurança, cobertura e prints):
+  [`docs/qss-relatorio.md`](docs/qss-relatorio.md).
 
 ## Fluxo de trabalho
 - Uma issue por funcionalidade, board no GitHub Projects (To Do / In Progress / Done).
