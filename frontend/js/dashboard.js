@@ -89,17 +89,21 @@ const AREA = {
   'grafico-pecas': 'area-pecas',
 };
 
+// Acessibilidade: o CONTÊINER do gráfico tem role="img" com um resumo em texto; o <canvas>
+// (interativo, por causa dos tooltips) fica escondido dos leitores de tela. Os números
+// completos estão na tabela "Ver dados em tabela".
 function desenhar(id, config, descricao) {
   graficos[id]?.destroy();
+  const area = $(AREA[id]);
   let canvas = $(id);
   if (!canvas) { // a área estava mostrando "sem dados": recria o canvas
-    const area = $(AREA[id]);
     limpar(area);
     area.classList.remove('sem-dados');
-    canvas = el('canvas', { attrs: { id, role: 'img' } });
+    canvas = el('canvas', { attrs: { id, 'aria-hidden': 'true' } });
     area.append(canvas);
   }
-  canvas.setAttribute('aria-label', descricao); // resumo para leitores de tela (a tabela tem os números)
+  area.setAttribute('role', 'img');
+  area.setAttribute('aria-label', descricao);
   graficos[id] = new Chart(canvas, config);
 }
 
@@ -123,6 +127,8 @@ function vazio(id, titulo, texto) {
   const area = $(AREA[id]);
   limpar(area);
   area.classList.add('sem-dados');
+  area.removeAttribute('role'); // agora é texto comum (o aviso), não uma imagem
+  area.removeAttribute('aria-label');
   area.append(estadoVazio({ titulo, texto }));
 }
 
