@@ -47,18 +47,23 @@ jobs:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
     steps:
-      - uses: actions/checkout@v7
+      # Actions fixadas pelo SHA completo do commit (uma tag pode ser movida; o SHA não).
+      # O Dependabot atualiza os SHAs; o comentário mostra a versão.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # histórico completo: o Sonar usa o blame para saber o que é código novo
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 20
           cache: npm
           cache-dependency-path: backend/package-lock.json
 
       - name: JWT_SECRET aleatório só para este job
-        run: echo "JWT_SECRET=$(openssl rand -hex 48)" >> "$GITHUB_ENV"
+        run: |
+          segredo=$(openssl rand -hex 48)
+          echo "::add-mask::$segredo"
+          echo "JWT_SECRET=$segredo" >> "$GITHUB_ENV"
 
       - name: Aplicar o banco (01, 02, 03 e 05)
         run: |
@@ -68,9 +73,11 @@ jobs:
             -f database/03_procedures.sql \
             -f database/05_usuarios_ativo.sql
 
+      # --ignore-scripts: nenhum script de instalação de dependência roda na CI (ataque de
+      # cadeia de suprimentos, Sonar S6505). O bcrypt já traz o binário pronto (prebuilds).
       - name: Instalar dependências do backend
         working-directory: backend
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: npm audit (falha com vulnerabilidade alta ou crítica)
         working-directory: backend
@@ -86,4 +93,4 @@ jobs:
       # Sem o secret (ex.: PR vindo de fork), os testes rodam e só a análise é pulada.
       - name: Análise SonarCloud
         if: env.SONAR_TOKEN != ''
-        uses: SonarSource/sonarqube-scan-action@v8
+        uses: SonarSource/sonarqube-scan-action@59202af334b4ba7b5db01b701b8e79f8b3bef0f4 # v8.5.0
