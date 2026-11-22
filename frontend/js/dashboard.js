@@ -45,7 +45,9 @@ if (Chart) {
   Chart.defaults.color = COR.texto;
   Chart.defaults.borderColor = COR.grade;
   Chart.defaults.maintainAspectRatio = false;
-  Chart.defaults.animation = reduzMovimento ? false : { duration: 400 };
+  // altera só a duração: trocar o objeto inteiro apagaria o easing padrão (erro "this._fn")
+  if (reduzMovimento) Chart.defaults.animation = false;
+  else Chart.defaults.animation.duration = 400;
   Chart.defaults.plugins.tooltip.backgroundColor = token('--grafite-900');
   Chart.defaults.plugins.tooltip.padding = 10;
   Chart.defaults.plugins.tooltip.titleFont = { weight: '600' };
@@ -65,6 +67,7 @@ function referencia(rotulo, valor, quantidade) {
     borderDash: [6, 4],
     pointRadius: 0,
     pointHitRadius: 0,
+    pointStyle: 'line', // na legenda com usePointStyle, aparece como traço (é uma linha)
     order: 0,
   };
 }
@@ -101,11 +104,16 @@ function desenhar(id, config, descricao) {
 }
 
 // tabela acessível sob cada gráfico (textContent via el())
-function tabela(alvo, cabecalho, linhas, { numericas = [] } = {}) {
+// numericas: alinhadas à direita em mono; fixas: mono sem quebra de linha (tags, códigos)
+function tabela(alvo, cabecalho, linhas, { numericas = [], fixas = [] } = {}) {
+  const classe = (i) => {
+    if (numericas.includes(i)) return 'numero mono';
+    return fixas.includes(i) ? 'mono sem-quebra' : '';
+  };
   limpar(alvo);
   alvo.append(el('table', { classe: 'tabela tabela-simples' }, [
     el('thead', {}, [el('tr', {}, cabecalho.map((t, i) => el('th', { classe: numericas.includes(i) ? 'numero' : '', texto: t, attrs: { scope: 'col' } })))]),
-    el('tbody', {}, linhas.map((l) => el('tr', {}, l.map((v, i) => el('td', { classe: numericas.includes(i) ? 'numero mono' : '', texto: v }))))),
+    el('tbody', {}, linhas.map((l) => el('tr', {}, l.map((v, i) => el('td', { classe: classe(i), texto: v }))))),
   ]));
 }
 
@@ -176,33 +184,36 @@ function renderMttr(eqs, mttrMedio) {
     limpar($('tabela-mttr'));
     return;
   }
-  const rotulos = comFalha.map((e) => e.tag);
+  // horizontal e ordenado do maior para o menor: tags legíveis (sem girar) e o ranking salta aos olhos
+  const ordenados = [...comFalha].sort((a, b) => b.mttr_h - a.mttr_h);
+  const rotulos = ordenados.map((e) => e.tag);
   desenhar('grafico-mttr', {
     type: 'bar',
     data: {
       labels: rotulos,
       datasets: [
-        { label: 'MTTR (h)', data: comFalha.map((e) => e.mttr_h), backgroundColor: COR.serie1, borderRadius: 4, maxBarThickness: 34, order: 1 },
-        referencia(`Média ${num(mttrMedio)} h`, mttrMedio, rotulos.length),
+        { label: 'MTTR (h)', data: ordenados.map((e) => e.mttr_h), backgroundColor: COR.serie1, borderRadius: 4, maxBarThickness: 18, order: 1 },
+        { ...referencia(`Média ponderada ${num(mttrMedio)} h`, mttrMedio, rotulos.length), indexAxis: 'y' },
       ],
     },
     options: {
-      interaction: { mode: 'index', intersect: false },
-      scales: { y: eixoY('horas'), x: eixoCategoria() },
+      indexAxis: 'y',
+      interaction: { mode: 'index', intersect: false, axis: 'y' },
+      scales: { x: eixoY('horas'), y: eixoCategoria({ ticks: { font: { family: '"IBM Plex Mono", Consolas, monospace' } } }) },
       plugins: {
         tooltip: {
           callbacks: {
-            title: (itens) => { const e = comFalha[itens[0].dataIndex]; return `${e.tag} · ${e.nome}`; },
+            title: (itens) => { const e = ordenados[itens[0].dataIndex]; return `${e.tag} · ${e.nome}`; },
             label: (ctx) => (ctx.datasetIndex === 0
-              ? `MTTR: ${num(ctx.raw)} h (${comFalha[ctx.dataIndex].n_falhas} falhas)`
-              : `Média geral: ${num(ctx.raw)} h`),
+              ? `MTTR: ${num(ctx.raw)} h (${ordenados[ctx.dataIndex].n_falhas} falhas)`
+              : `Média ponderada: ${num(ctx.raw)} h`),
           },
         },
       },
     },
-  }, `MTTR por equipamento. Maior: ${[...comFalha].sort((a, b) => b.mttr_h - a.mttr_h)[0].tag}. Média ${num(mttrMedio)} horas.`);
+  }, `MTTR por equipamento, do maior para o menor. Maior: ${ordenados[0].tag} com ${num(ordenados[0].mttr_h)} horas. Média ponderada ${num(mttrMedio)} horas.`);
   tabela($('tabela-mttr'), ['Tag', 'Equipamento', 'Falhas', 'MTTR (h)', 'MTBF (h)'],
-    comFalha.map((e) => [e.tag, e.nome, e.n_falhas, num(e.mttr_h), num(e.mtbf_h)]), { numericas: [2, 3, 4] });
+    ordenados.map((e) => [e.tag, e.nome, e.n_falhas, num(e.mttr_h), num(e.mtbf_h)]), { numericas: [2, 3, 4], fixas: [0] });
 }
 
 function renderDisponibilidade(eqs, dispMedia) {
@@ -210,11 +221,13 @@ function renderDisponibilidade(eqs, dispMedia) {
     vazio('grafico-disp', 'Sem equipamentos', 'Cadastre equipamentos para ver a disponibilidade.');
     return;
   }
-  const valores = eqs.map((e) => e.disponibilidade);
+  // do menos disponível (mais crítico) para o mais disponível
+  const ordenados = [...eqs].sort((a, b) => a.disponibilidade - b.disponibilidade);
+  const valores = ordenados.map((e) => e.disponibilidade);
   // pontos (não barras): o eixo pode começar perto dos valores sem exagerar diferenças
   const minimo = Math.max(0, Math.floor(Math.min(...valores) - 2));
   $('subtitulo-disp').textContent = `%, MTBF ÷ (MTBF + MTTR) · eixo começa em ${minimo}%`;
-  const rotulos = eqs.map((e) => e.tag);
+  const rotulos = ordenados.map((e) => e.tag);
   desenhar('grafico-disp', {
     type: 'line',
     data: {
@@ -227,31 +240,47 @@ function renderDisponibilidade(eqs, dispMedia) {
           pointRadius: 6,
           pointHoverRadius: 8,
           pointBackgroundColor: COR.serie1,
+          borderColor: COR.serie1,
           pointBorderColor: token('--branco'),
           pointBorderWidth: 2,
+          pointStyle: 'circle',
           order: 1,
         },
         referencia(`Média ${num(dispMedia)}%`, dispMedia, rotulos.length),
       ],
     },
     options: {
-      interaction: { mode: 'index', intersect: false },
+      indexAxis: 'y',
+      interaction: { mode: 'index', intersect: false, axis: 'y' },
       scales: {
-        y: eixoY('%', { beginAtZero: false, min: minimo, max: 100, ticks: { callback: (v) => `${v}%` } }),
-        x: eixoCategoria({ offset: true }),
+        x: eixoY('%', { beginAtZero: false, min: minimo, max: 100, ticks: { callback: (v) => `${v}%` } }),
+        y: eixoCategoria({ offset: true, ticks: { font: { family: '"IBM Plex Mono", Consolas, monospace' } } }),
       },
       plugins: {
+        // ícone de cada série na legenda = a própria marca (círculo para os pontos, traço para a média)
+        legend: {
+          labels: {
+            usePointStyle: true,
+            generateLabels: (grafico) => Chart.defaults.plugins.legend.labels.generateLabels(grafico).map((item) => ({
+              ...item,
+              pointStyle: item.datasetIndex === 0 ? 'circle' : 'line',
+              fillStyle: item.datasetIndex === 0 ? COR.serie1 : COR.referencia,
+              strokeStyle: item.datasetIndex === 0 ? COR.serie1 : COR.referencia,
+              lineWidth: 2,
+            })),
+          },
+        },
         tooltip: {
           callbacks: {
-            title: (itens) => { const e = eqs[itens[0].dataIndex]; return `${e.tag} · ${e.nome}`; },
+            title: (itens) => { const e = ordenados[itens[0].dataIndex]; return `${e.tag} · ${e.nome}`; },
             label: (ctx) => (ctx.datasetIndex === 0 ? `Disponibilidade: ${num(ctx.raw, 2)}%` : `Média: ${num(ctx.raw, 2)}%`),
           },
         },
       },
     },
-  }, `Disponibilidade por equipamento, de ${num(Math.min(...valores))}% a ${num(Math.max(...valores))}%. Média ${num(dispMedia)}%.`);
+  }, `Disponibilidade por equipamento, de ${num(Math.min(...valores))}% (${ordenados[0].tag}) a ${num(Math.max(...valores))}%. Média ${num(dispMedia)}%.`);
   tabela($('tabela-disp'), ['Tag', 'Equipamento', 'Disponibilidade', 'Custo'],
-    eqs.map((e) => [e.tag, e.nome, `${num(e.disponibilidade, 2)}%`, moeda.format(e.custo_total)]), { numericas: [2, 3] });
+    ordenados.map((e) => [e.tag, e.nome, `${num(e.disponibilidade, 2)}%`, moeda.format(e.custo_total)]), { numericas: [2, 3], fixas: [0] });
 }
 
 async function carregarPeriodo(dias) {
@@ -293,11 +322,13 @@ async function carregarPareto() {
           {
             type: 'line', label: '% acumulado', data: linhas.map((l) => l.pct_acumulado),
             borderColor: COR.serie2, backgroundColor: COR.serie2, borderWidth: 2, pointRadius: 4, pointHoverRadius: 6, tension: 0, order: 1,
+            clip: false, // o último ponto (100%) não é cortado no topo
           },
           referencia('80% (corte do Pareto)', 80, linhas.length),
         ],
       },
       options: {
+        layout: { padding: { top: 8 } },
         interaction: { mode: 'index', intersect: false },
         scales: { y: eixoY('% das falhas', { max: 100, ticks: { callback: (v) => `${v}%` } }), x: eixoCategoria({ ticks: { autoSkip: false, maxRotation: 0 } }) },
         plugins: {
@@ -348,7 +379,7 @@ async function carregarTopPecas() {
     }, `Top 5 peças consumidas em 30 dias. Primeira: ${linhas[0].codigo}, ${linhas[0].qtd_consumida} unidades.`);
     tabela($('tabela-pecas'), ['Código', 'Descrição', 'Unid.', 'OS', 'Custo', 'Estoque'],
       linhas.map((l) => [l.codigo, l.descricao, l.qtd_consumida, l.qtd_os, moedaCurta.format(l.custo_estimado), `${l.estoque_atual} / mín. ${l.estoque_min}`]),
-      { numericas: [2, 3, 4] });
+      { numericas: [2, 3, 4], fixas: [0, 5] });
   } catch (erro) {
     erroNoBloco('grafico-pecas', erro);
   }
@@ -361,9 +392,14 @@ async function carregarMttrAcima() {
     limpar(alvo);
     if (!linhas.length) { alvo.append(estadoVazio({ titulo: 'Nenhum equipamento acima da média', texto: 'Todos estão na média ou abaixo dela.' })); return; }
     const media = linhas[0].mttr_medio_h;
-    alvo.append(el('p', { classe: 'nota-tabela', texto: `Média geral dos equipamentos: ${num(media)} h` }));
+    // a consulta BD2 compara com a média SIMPLES dos MTTR dos equipamentos (AVG na subquery);
+    // o card "MTTR médio" usa a média ponderada pelas falhas — por isso os valores diferem
+    alvo.append(el('p', {
+      classe: 'nota-tabela',
+      texto: `Média simples dos MTTR dos equipamentos: ${num(media, 2)} h (o card "MTTR médio" é ponderado pelas falhas).`,
+    }));
     tabela(alvo.appendChild(el('div')), ['Tag', 'Equipamento', 'Falhas', 'MTTR', 'Acima da média'],
-      linhas.map((l) => [l.tag, l.nome, l.n_falhas, `${num(l.mttr_h)} h`, `+${num(l.mttr_h - media)} h`]), { numericas: [2, 3, 4] });
+      linhas.map((l) => [l.tag, l.nome, l.n_falhas, `${num(l.mttr_h, 2)} h`, `+${num(l.mttr_h - media, 2)} h`]), { numericas: [2, 3, 4], fixas: [0] });
   } catch (erro) {
     limpar(alvo);
     mostrarMensagem(alvo, `Não foi possível carregar: ${erro instanceof ErroApi ? erro.mensagem : erro.message}`);

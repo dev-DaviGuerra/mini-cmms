@@ -839,7 +839,8 @@ a.indicador.parados.ativo:hover { background: color-mix(in srgb, var(--critico-s
 .painel-grafico-cabecalho { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--esp-3); margin-bottom: var(--esp-3); }
 .painel-grafico h2 { font-size: var(--texto-base); }
 .subtitulo-grafico { margin: 2px 0 0; font-size: var(--texto-sm); color: var(--texto-suave); }
-.grafico { position: relative; height: 260px; }
+.grafico { position: relative; height: 300px; }
+.sem-quebra { white-space: nowrap; }
 .grafico-alto { height: 300px; }
 .grafico.sem-dados { height: auto; }
 .dados-grafico { margin-top: var(--esp-2); font-size: var(--texto-sm); }
