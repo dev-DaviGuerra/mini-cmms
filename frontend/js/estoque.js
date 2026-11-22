@@ -94,6 +94,7 @@ async function carregarAlertas() {
   const alertas = await api.get('/alertas');
   limpar(lista);
   $('secao-alertas').hidden = false;
+  $('secao-alertas').classList.toggle('com-alertas', alertas.length > 0);
   if (!alertas.length) {
     lista.append(el('li', { classe: 'sem-alertas', texto: 'Nenhum alerta pendente. Todas as peças estão acima do mínimo.' }));
     return;

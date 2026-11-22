@@ -75,6 +75,13 @@
   --status-aguardando-peca: #e8590c;
   --status-fechada: #2e7d4f;
   --status-cancelada: #8a939d;
+  /* gráficos (dashboard). Paleta categórica validada (CVD ΔE 24,7; contraste >= 3:1 no branco).
+     O JS lê estes valores com getComputedStyle: a cor tem uma única fonte, este arquivo. */
+  --grafico-serie-1: #2a78d6;  /* série principal (azul) */
+  --grafico-serie-2: #eb6834;  /* segunda série (laranja), ex.: % acumulado do Pareto */
+  --grafico-referencia: #5d6772; /* linhas de referência (média, 80%): tinta neutra tracejada */
+  --grafico-grade: #eceff2;
+  --grafico-texto: #5d6772;
   --critico: #a4161a;          /* máquina parada: o alerta mais grave do painel */
   --critico-suave: #fbe9e9;
 
@@ -354,9 +361,11 @@ button.indicador:hover { background: var(--cinza-50); }
 .indicador.aberta { --cor-indicador: var(--status-aberta); }
 .indicador.em-andamento { --cor-indicador: var(--status-em-andamento); }
 .indicador.aguardando-peca { --cor-indicador: var(--status-aguardando-peca); }
-.indicador.parados { --cor-indicador: var(--critico); }
-/* com pelo menos uma máquina parada: fundo de alerta, número na cor crítica e ponto pulsando */
-.indicador.parados.ativo { background: var(--critico-suave); border-color: var(--critico); }
+/* indicador crítico (máquinas paradas, peças abaixo do mínimo): NEUTRO quando o valor é 0;
+   com pelo menos um item (classe .ativo): borda, fundo, número e ponto na cor crítica + pulso */
+.indicador.parados { --cor-indicador: var(--grafite-300); }
+.indicador.parados:not(.ativo) .status { --cor-status: var(--grafite-400); }
+.indicador.parados.ativo { --cor-indicador: var(--critico); background: var(--critico-suave); border-color: var(--critico); }
 .indicador.parados.ativo .indicador-valor { color: var(--critico); }
 .indicador.parados.ativo .status::before { animation: pulso 1.6s ease-in-out infinite; }
 @keyframes pulso {
@@ -738,14 +747,17 @@ body.drawer-aberto { overflow: hidden; }
 .campo-marcar label { font-weight: 500; color: var(--texto); }
 
 /* alertas pendentes */
-.painel-alertas { margin-bottom: var(--esp-4); border-left: 4px solid var(--critico); }
+/* neutro sem alertas; vermelho só quando há alerta pendente (classe .com-alertas) */
+.painel-alertas { margin-bottom: var(--esp-4); border-left: 4px solid var(--grafite-300); }
+.painel-alertas.com-alertas { border-left-color: var(--critico); }
 .titulo-secao {
   font-size: var(--texto-xs);
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--critico);
+  color: var(--texto-suave);
 }
+.painel-alertas.com-alertas .titulo-secao { color: var(--critico); }
 .lista-alertas { list-style: none; margin: 0; padding: 0; }
 .lista-alertas li {
   display: grid;
@@ -774,6 +786,68 @@ body.drawer-aberto { overflow: hidden; }
   font-size: var(--texto-sm);
 }
 .situacao-peca.abaixo { border-color: var(--critico); background: var(--critico-suave); }
+
+/* =====================================================================
+   Dashboard
+   ===================================================================== */
+/* filtro de período: grupo de botões (radio) segmentado */
+.periodo { display: inline-flex; margin: 0; padding: 2px; border: 1px solid var(--cinza-200); border-radius: var(--raio); background: var(--superficie); }
+.periodo input { position: absolute; opacity: 0; pointer-events: none; }
+.periodo label {
+  padding: var(--esp-1) var(--esp-4);
+  font-size: var(--texto-md);
+  font-weight: 600;
+  color: var(--grafite-700);
+  border-radius: var(--raio-sm);
+  cursor: pointer;
+}
+.periodo label:hover { background: var(--cinza-100); }
+.periodo input:checked + label { background: var(--destaque); color: var(--sobre-destaque); }
+.periodo input:focus-visible + label { box-shadow: var(--anel-foco); }
+
+.titulo-bloco { display: flex; align-items: center; gap: var(--esp-3); margin-bottom: var(--esp-2); }
+.titulo-bloco h2 {
+  font-size: var(--texto-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--texto-suave);
+}
+.periodo-datas { margin-left: var(--esp-2); text-transform: none; letter-spacing: 0; color: var(--grafite-700); }
+.ajuda-bloco { margin: 0 0 var(--esp-3); }
+
+/* rótulo discreto da técnica SQL usada no bloco */
+.tecnica {
+  font-family: var(--fonte-mono);
+  font-size: 0.6875rem;
+  color: var(--grafite-500);
+  border: 1px solid var(--cinza-200);
+  border-radius: var(--raio-sm);
+  padding: 1px var(--esp-2);
+  white-space: nowrap;
+  background: var(--cinza-50);
+}
+
+.indicadores.indicadores-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+a.indicador { text-decoration: none; transition: background var(--transicao); }
+a.indicador:hover { background: var(--cinza-50); }
+a.indicador.parados.ativo:hover { background: color-mix(in srgb, var(--critico-suave) 80%, var(--branco)); }
+
+.grade-graficos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--esp-4); }
+.painel-grafico { padding: var(--esp-4) var(--esp-5) var(--esp-3); min-width: 0; }
+.painel-grafico.largo { grid-column: 1 / -1; }
+.painel-grafico-cabecalho { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--esp-3); margin-bottom: var(--esp-3); }
+.painel-grafico h2 { font-size: var(--texto-base); }
+.subtitulo-grafico { margin: 2px 0 0; font-size: var(--texto-sm); color: var(--texto-suave); }
+.grafico { position: relative; height: 300px; }
+.sem-quebra { white-space: nowrap; }
+.grafico-alto { height: 300px; }
+.grafico.sem-dados { height: auto; }
+.dados-grafico { margin-top: var(--esp-2); font-size: var(--texto-sm); }
+.dados-grafico summary { cursor: pointer; color: var(--texto-suave); padding: var(--esp-1) 0; }
+.dados-grafico summary:hover { color: var(--texto); }
+.dados-grafico table { margin-top: var(--esp-2); }
+.nota-tabela { margin: 0 0 var(--esp-2); font-size: var(--texto-sm); color: var(--texto-suave); }
 
 /* =====================================================================
    Login (tela dividida)
@@ -883,7 +957,8 @@ body.drawer-aberto { overflow: hidden; }
   .conteudo { padding: var(--esp-5); }
 }
 @media (max-width: 1100px) {
-  .grade-detalhe { grid-template-columns: 1fr; }
+  .grade-detalhe, .grade-graficos { grid-template-columns: 1fr; }
+  .indicadores.indicadores-5 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .dados { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 960px) {
