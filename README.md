@@ -1,10 +1,16 @@
-# Mini-CMMS
+# MaintOS
+
+**Gestão de manutenção industrial (CMMS)**
 
 [![CI](https://github.com/dev-DaviGuerra/mini-cmms/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/dev-DaviGuerra/mini-cmms/actions/workflows/ci.yml)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=dev-DaviGuerra_mini-cmms&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=dev-DaviGuerra_mini-cmms)
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=dev-DaviGuerra_mini-cmms&metric=coverage)](https://sonarcloud.io/summary/new_code?id=dev-DaviGuerra_mini-cmms)
 
 Sistema de Ordens de Manutenção e Estoque de Peças — projeto da AVD2 (Módulo IV).
+O nome junta *Maint* (de *maintenance*, manutenção) e *OS* (Ordem de Serviço).
+
+Em produção: **https://maintos.com.br** (Render; ver [Deploy](#deploy-render)). O repositório
+e o projeto no SonarCloud mantêm o nome técnico `mini-cmms`.
 
 Permite cadastrar equipamentos, abrir ordens de serviço (OS), fechá-las consumindo peças do
 estoque numa transação atômica e acompanhar indicadores de manutenção (MTTR, MTBF,
@@ -38,7 +44,7 @@ Os scripts SQL são **portáveis**. Usam só PostgreSQL padrão (PL/pgSQL, `TIME
 funções de janela), sem nenhum recurso exclusivo do Neon, e rodam igual em vários ambientes:
 - PostgreSQL 14 ou mais novo, local;
 - Neon (testado no PostgreSQL 19);
-- VM da Azure (testado no PostgreSQL 18).
+- PostgreSQL 18 da CI (GitHub Actions).
 
 A conexão da API e do seed usa SSL com verificação de certificado sempre que o host não é
 `localhost`.
@@ -147,7 +153,8 @@ Toda resposta de erro tem o formato `{ "erro": { "codigo", "mensagem", "detalhes
 
 HTML + CSS + JavaScript puro (ES Modules), sem framework e sem build, na pasta `frontend/`.
 Em desenvolvimento, o próprio Express serve a pasta: com a API rodando (`npm start` em `backend/`),
-abra **http://localhost:3000**. No deploy, quem serve os arquivos é o NGINX.
+abra **http://localhost:3000**. Em produção (Render) é igual: o mesmo processo Node serve a
+API e o front, na mesma origem.
 
 | Página | Conteúdo |
 |---|---|
@@ -178,8 +185,66 @@ Segurança no front:
 - `js/api.js` envia o token e, num 401, encerra a sessão e volta ao login;
 - a tela esconde botões conforme o perfil, mas quem garante a permissão é sempre a API;
 - sem CDN: fontes, logo e scripts são servidos pelo próprio site;
-- em desenvolvimento, `package.json`, `scripts/` e `node_modules/` do front não são servidos.
-  No NGINX do deploy, bloquear os mesmos caminhos.
+- `package.json`, `scripts/` e `node_modules/` do front não são servidos (404), em
+  desenvolvimento e em produção.
+
+## Deploy (Render)
+
+Arquitetura em produção:
+
+```
+navegador ──HTTPS──> maintos.com.br ──DNS (Registro.br)──> Render
+                                                           │ balanceador: termina o HTTPS
+                                                           │ (certificado automático) e
+                                                           │ redireciona HTTP -> HTTPS
+                                                           ▼
+                                                     Node 20 + Express (1 processo)
+                                                     /api/*  -> API
+                                                     /*      -> frontend/ (estáticos)
+                                                           │ TLS, certificado verificado
+                                                           ▼
+                                                     Neon (PostgreSQL gerenciado)
+```
+
+- **Domínio:** `maintos.com.br`, registrado no Registro.br. O DNS do Registro.br (modo
+  avançado) aponta o domínio para o Render: registro `A` da raiz para o IP do balanceador do
+  Render e `CNAME` do `www` para o subdomínio `.onrender.com` do serviço. O `www` redireciona
+  para a raiz.
+- **Render:** é o servidor web e o proxy reverso. Faz o HTTPS (certificado criado e renovado
+  sozinho), redireciona HTTP para HTTPS e repassa a requisição ao Node por HTTP. Não há NGINX:
+  o próprio Express serve o `frontend/`, com a mesma 404 e o mesmo bloqueio de arquivos
+  internos do desenvolvimento.
+- **Aplicação:** um *web service* Node descrito em [`render.yaml`](render.yaml) (Blueprint):
+  `rootDir: backend`, build `npm ci --omit=dev --ignore-scripts`, start `npm start`, health
+  check em `/api/health`, plano free, região `virginia` (não há região na América do Sul; é a
+  mais próxima do Brasil). Só publica um commit da `main` depois que a CI passa
+  (`autoDeployTrigger: checksPass`).
+- **Banco:** continua no Neon, acessado por `DATABASE_URL`, com SSL e certificado verificado.
+
+Variáveis de ambiente do serviço:
+
+| Variável | Valor | Onde é definida |
+|---|---|---|
+| `DATABASE_URL` | connection string do banco de produção no Neon | painel do Render (secreta) |
+| `JWT_SECRET` | segredo novo, só de produção (96 caracteres hex) | painel do Render (secreta) |
+| `NODE_ENV` | `production` | `render.yaml` |
+| `NODE_VERSION` | `20` (a mesma versão da CI) | `render.yaml` |
+| `LOGIN_RATE_LIMIT_MAX` | `10` | `render.yaml` |
+| `TRUST_PROXY` | `1` (o balanceador do Render) | `render.yaml` |
+| `PORT` | definida pelo próprio Render (padrão 10000) | automática |
+
+Atrás do proxy: `trust proxy = 1` faz o Express usar o último endereço do `X-Forwarded-For`,
+que é o que o balanceador acrescenta. Assim o rate limit conta por cliente, e um IP forjado
+pelo cliente no começo do cabeçalho não muda o contador (há teste). Em produção a CSP inclui
+`upgrade-insecure-requests`, e o helmet envia HSTS, `nosniff`, `X-Frame-Options` e
+`Referrer-Policy`.
+
+**Cold start do plano free:** depois de 15 minutos sem requisições o Render desliga a
+instância. A próxima requisição a liga de novo, o que leva cerca de 1 minuto, e por isso a
+primeira página demora. O Neon também suspende o banco quando ele fica ocioso, e a primeira
+consulta acorda o banco. Antes de uma apresentação, abra o site alguns minutos antes. O plano
+free tem 750 horas de instância por mês e disco efêmero, mas o sistema não grava arquivos:
+todos os dados ficam no Neon.
 
 ## Qualidade e segurança (CI)
 

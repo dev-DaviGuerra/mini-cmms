@@ -1,7 +1,12 @@
-# CLAUDE.md — Regras do projeto Mini-CMMS
+# CLAUDE.md — Regras do projeto MaintOS
 
 Projeto individual da AVD2 (Módulo IV). Apresentação: **01/12/2026**.
 Referência completa: `Mini-CMMS_Projeto_AVD2.pdf` (local, fora do git).
+
+**Nome do produto: MaintOS** ("OS" maiúsculo: *Maint* de *maintenance* + *OS* de Ordem de
+Serviço). Subtítulo: "Gestão de manutenção industrial (CMMS)". Em toda tela, título e doc usar
+"MaintOS". O repositório, a chave do SonarCloud e os nomes de pacote npm continuam `mini-cmms`
+(não renomear). No login, o "OS" fica em `--destaque` pela classe `.marca-os`.
 
 ## Escopo MVP (não adicionar nada além disto)
 
@@ -43,8 +48,10 @@ só com `sonar.exclusions` e `sonar.coverage.exclusions`. Os `.sql` ficam fora d
 SonarCloud os lê como PL/SQL do Oracle, o que gerava o aviso do Data Dictionary e erros de parse. Actions do workflow fixadas por SHA
 completo (S7637) e `npm ci --ignore-scripts` (S6505).
 
+**Deploy (#11): Render**, não Azure. Ver a seção "Deploy (Render)" abaixo.
+
 Fora do escopo (só se o usuário pedir): cancelamento de OS, entrada de nota, cadastro aberto
-(autocadastro) de usuários, deploy, artigo, slides.
+(autocadastro) de usuários, artigo, slides.
 
 **Segurança de usuários (#28):**
 - Nunca apagar usuário, só desativar.
@@ -93,7 +100,7 @@ Fora do escopo (só se o usuário pedir): cancelamento de OS, entrada de nota, c
 - **Nunca exibir as connection strings** (contêm usuário e senha). Para usá-las num comando,
   leia-as do `.env` sem imprimir.
 - Os scripts SQL são **portáveis**: só PostgreSQL padrão, sem recurso exclusivo do Neon. Devem
-  continuar rodando também em PostgreSQL local 14+ e na VM da Azure (deploy).
+  continuar rodando também em PostgreSQL local 14+ e no PostgreSQL 18 da CI.
 - Banco remoto => `ssl: { rejectUnauthorized: true }`. A regra fica em `configConexao()`
   (`backend/src/db.js` e `database/seed.js`). Os parâmetros `sslmode`/`channel_binding` da URL
   são removidos para o driver `pg`.
@@ -105,7 +112,11 @@ Fora do escopo (só se o usuário pedir): cancelamento de OS, entrada de nota, c
 - Escrita com mais de um passo usa `transacao(usuarioId, fn)` de `db.js`. Ela já faz
   `BEGIN`, `set_config('app.usuario_id', ...)`, `COMMIT`/`ROLLBACK`.
 - Erros: lançar as classes de `src/errors.js`; o middleware `erros.js` formata a resposta.
-- `app.set('trust proxy', 1)`: a API roda atrás de 1 proxy (NGINX) no deploy.
+- `trust proxy` vem de `TRUST_PROXY` (padrão 1, o balanceador do Render). Nunca `true`: o
+  Express usaria o primeiro IP do `X-Forwarded-For`, que o cliente pode forjar.
+- `app.js` exporta `criarApp({ producao, trustProxy })` e `app = criarApp()`. Os testes de
+  produção montam o app com `criarApp({ producao: true })`.
+- `/api/health` fica antes do rate limit (health check do Render) e não consulta o banco.
 - Consultas BD2: a fonte única é `database/04_consultas_bd2.sql`. Cada consulta começa com
   `-- @consulta <nome>` e é exposta em `/api/kpis/<nome>` (`src/consultasBd2.js`). Não copiar
   o SQL para o JavaScript. As consultas recebem o período em `$1`/`$2` (datas, como em
@@ -116,7 +127,8 @@ Fora do escopo (só se o usuário pedir): cancelamento de OS, entrada de nota, c
 
 ## Convenções do front (`frontend/`)
 - HTML + CSS + JS puro com ES Modules, sem framework e sem build. O Express serve a pasta em
-  desenvolvimento (`NODE_ENV` diferente de `production`); no deploy, o NGINX.
+  desenvolvimento **e em produção** (no Render não há NGINX), com a 404 e o bloqueio de
+  `package.json`, `scripts/` e `node_modules/`.
 - Toda chamada à API passa por `js/api.js` (token do `sessionStorage`, `ErroApi`, 401 => login).
   Páginas protegidas começam com `const usuario = await exigirLogin();`.
 - **Nunca `innerHTML`/`outerHTML`/`insertAdjacentHTML`** com dados: criar os elementos com
@@ -153,6 +165,21 @@ Fora do escopo (só se o usuário pedir): cancelamento de OS, entrada de nota, c
   dados de teste no `cmms` de desenvolvimento. Parar a instância 3001 antes de rodar `npm test`,
   porque os dois usam o mesmo banco.
 - Rotas inexistentes fora de `/api` mostram `404.html` (caminhos absolutos nela).
+
+## Deploy (Render) — issue #11
+- Domínio `maintos.com.br` no Registro.br (DNS do Registro.br, modo avançado): `A` da raiz para o
+  IP do balanceador do Render e `CNAME` do `www` para `<serviço>.onrender.com`. O Render faz o
+  HTTPS (certificado automático) e redireciona HTTP para HTTPS e `www` para a raiz.
+- `render.yaml` (Blueprint) na raiz: web service `maintos`, `runtime: node`, `rootDir: backend`,
+  `npm ci --omit=dev --ignore-scripts`, `npm start`, `healthCheckPath: /api/health`, `plan: free`,
+  `region: virginia` (não há região na América do Sul), `autoDeployTrigger: checksPass`.
+  O `buildFilter` inclui `frontend/**` e o `04_consultas_bd2.sql`, que ficam fora do `rootDir`.
+- Variáveis: `DATABASE_URL` e `JWT_SECRET` só no painel do Render (`sync: false`);
+  `NODE_ENV=production`, `NODE_VERSION=20`, `LOGIN_RATE_LIMIT_MAX=10` e `TRUST_PROXY=1` no
+  `render.yaml`; `PORT` é do Render. O `JWT_SECRET` de produção fica fora do git, em
+  `C:\Users\davim\maintos-segredos\JWT_SECRET_producao.txt`. Nunca exibir o valor nem commitá-lo.
+- Plano free: a instância dorme após 15 min sem tráfego, e acordar leva cerca de 1 min (cold
+  start). Abrir o site antes da apresentação.
 
 ## Comandos
 ```bash

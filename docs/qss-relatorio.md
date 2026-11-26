@@ -1,4 +1,4 @@
-# Relatório de Qualidade e Segurança de Software (QSS) — Mini-CMMS
+# Relatório de Qualidade e Segurança de Software (QSS) — MaintOS
 
 Projeto individual da AVD2 (Módulo IV). Repositório público, todos os dados são fictícios.
 Ferramentas: **SonarCloud** (análise estática e cobertura), **GitHub Actions** (CI),
@@ -75,10 +75,12 @@ A coluna PR é o pull request em que a correção entrou (o #12 é este). O deta
 | **Segredos** | `.env` no `.gitignore`; `.env.example` sem valores reais; banco remoto com SSL e certificado verificado (`rejectUnauthorized: true`); na CI, `JWT_SECRET` aleatório por execução e o `SONAR_TOKEN` só como *secret* | varredura do histórico (seção 4) |
 | **Dependências** | `npm audit` na CI (falha com alta/crítica); Dependabot semanal; `overrides` de `glob`/`minimatch` para versões corrigidas na árvore do c8 | `npm audit`: 0 vulnerabilidades |
 
-**Pendente para o deploy (#11):** HTTPS no NGINX (com `upgrade-insecure-requests`, já ligado
-em produção), bloquear no NGINX os mesmos caminhos internos do front e conectar a API com um
-usuário do PostgreSQL que tenha só permissões de leitura e escrita nas tabelas (sem DDL), em vez
-do dono do banco.
+**Deploy (#11, Render):** o HTTPS é feito pelo balanceador do Render (certificado automático,
+HTTP redirecionado para HTTPS), e a CSP de produção inclui `upgrade-insecure-requests`. O
+mesmo Express serve o front e bloqueia os caminhos internos, com teste no modo produção.
+`trust proxy = 1`, com teste de que um `X-Forwarded-For` forjado não muda o contador do rate limit.
+**Ainda pendente:** conectar a API com um usuário do PostgreSQL que tenha só permissões de
+leitura e escrita nas tabelas (sem DDL), em vez do dono do banco.
 
 ---
 
