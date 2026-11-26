@@ -9,6 +9,7 @@
 -- Rodar depois do seed. Sem -v, o período é o padrão: últimos 90 dias até hoje.
 --   psql "$DATABASE_URL" -f database/04_consultas_bd2.sql
 --   psql "$DATABASE_URL" -v data_ini=2026-09-01 -v data_fim=2026-09-30 -f database/04_consultas_bd2.sql
+--   psql "$DATABASE_URL" -v empresa_id=2 -f database/04_consultas_bd2.sql
 -- No psql, os valores chegam aos $1/$2 pelo comando \bind (psql 16 ou mais novo; o
 -- servidor pode ser 14+). O psql manda o SQL e os valores separados, como a API faz.
 --
@@ -28,7 +29,15 @@ SELECT CURRENT_DATE::text AS data_fim \gset
 \else
 SELECT (:'data_fim'::date - 90)::text AS data_ini \gset
 \endif
-\echo '== Período:' :data_ini 'a' :data_fim '=='
+-- Multiempresa (#41): com o papel da API (DATABASE_URL = maintos_app), a Row-Level Security
+-- mostra só a empresa do contexto. Padrão: empresa 1 (Empresa Demonstração); para outra,
+-- -v empresa_id=2. Com o dono (DATABASE_URL_ADMIN, que ignora a RLS) as empresas se misturam.
+\if :{?empresa_id}
+\else
+\set empresa_id 1
+\endif
+SELECT set_config('app.empresa_id', :'empresa_id', false) AS contexto_empresa \gset
+\echo '== Empresa:' :empresa_id '| Período:' :data_ini 'a' :data_fim '=='
 
 
 -- ---------------------------------------------------------------------
