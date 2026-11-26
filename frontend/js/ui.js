@@ -1,7 +1,7 @@
 // Utilitários de interface. REGRA DE SEGURANÇA: dados vindos da API entram na página só por
 // textContent (via el()), nunca por innerHTML. Assim um texto como "<img onerror=...>" gravado
 // numa descrição de OS aparece como texto e não é executado (proteção contra XSS).
-import { api, ErroApi, sair } from './api.js';
+import { api, ErroApi, sair, paginaInicial } from './api.js';
 
 export function el(tag, opcoes = {}, filhos = []) {
   const elemento = document.createElement(tag);
@@ -33,7 +33,9 @@ export const ROTULOS_PRIORIDADE = Object.freeze({
 
 export const ROTULOS_TIPO = Object.freeze({ CORRETIVA: 'Corretiva', PREVENTIVA: 'Preventiva' });
 
-export const ROTULOS_PERFIL = Object.freeze({ OPERADOR: 'Operador', TECNICO: 'Técnico', SUPERVISOR: 'Supervisor' });
+export const ROTULOS_PERFIL = Object.freeze({
+  OPERADOR: 'Operador', TECNICO: 'Técnico', SUPERVISOR: 'Supervisor', PLATAFORMA: 'Administração da plataforma',
+});
 
 // 'AGUARDANDO_PECA' -> 'aguardando-peca' (nome de classe CSS)
 export const classeDe = (valor) => String(valor).toLowerCase().replaceAll('_', '-');
@@ -244,6 +246,11 @@ const GRUPOS_MENU = [
   },
 ];
 
+// O administrador da plataforma não vê as telas das empresas: só o próprio painel.
+const GRUPOS_MENU_PLATAFORMA = [
+  { titulo: 'Plataforma', itens: [{ id: 'plataforma', href: 'plataforma.html', texto: 'Solicitações e empresas' }] },
+];
+
 function itemMenu(item, paginaAtual) {
   if (!item.href) {
     return el('span', { classe: 'menu-item desabilitado', attrs: { 'aria-disabled': 'true' } }, [
@@ -332,13 +339,19 @@ function montarDrawerSenha(botaoOrigem) {
 
 // Menu lateral: logo, navegação por grupos e, no rodapé, usuário + perfil + Trocar senha + Sair
 export function montarLayout(usuario, paginaAtual) {
-  const marca = el('a', { classe: 'menu-marca', attrs: { href: 'os.html' } }, [
+  const marca = el('a', { classe: 'menu-marca', attrs: { href: paginaInicial(usuario) } }, [
     el('img', { attrs: { src: 'img/logo.svg', alt: '', width: 30, height: 30 } }),
     el('span', { texto: 'MaintOS' }),
   ]);
+  // multiempresa: deixa claro de qual empresa são os dados da tela
+  const empresa = el('p', {
+    classe: 'menu-empresa',
+    texto: usuario.perfil === 'PLATAFORMA' ? 'Plataforma MaintOS' : (usuario.empresaNome ?? ''),
+  });
 
   const grupos = [];
-  GRUPOS_MENU.forEach((grupo, i) => {
+  const gruposDoPerfil = usuario.perfil === 'PLATAFORMA' ? GRUPOS_MENU_PLATAFORMA : GRUPOS_MENU;
+  gruposDoPerfil.forEach((grupo, i) => {
     const itens = grupo.itens.filter((item) => !item.perfis || item.perfis.includes(usuario.perfil));
     if (!itens.length) return;
     const idTitulo = `titulo-menu-${i}`;
@@ -360,6 +373,7 @@ export function montarLayout(usuario, paginaAtual) {
   limpar(menu);
   menu.append(
     marca,
+    empresa,
     el('div', { classe: 'menu-faixa', attrs: { 'aria-hidden': 'true' } }),
     ...grupos,
     el('div', { classe: 'menu-rodape' }, [

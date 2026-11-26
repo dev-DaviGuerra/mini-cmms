@@ -1205,6 +1205,100 @@ abbr[title] { text-decoration: underline dotted; cursor: help; }
 }
 
 /* =====================================================================
+   Multiempresa (#41): empresa no menu, cadastro público, privacidade,
+   troca obrigatória de senha e painel da plataforma
+   ===================================================================== */
+.menu-empresa {
+  margin: 0;
+  padding: var(--esp-2) var(--esp-5);
+  font-size: var(--texto-sm);
+  font-weight: 600;
+  color: var(--grafite-300);
+  overflow-wrap: anywhere;
+}
+
+/* página pública com formulário ou texto (mesmo topo e rodapé da landing) */
+.landing-pagina { padding: var(--esp-7); background: var(--fundo); }
+.landing-pagina-conteudo { max-width: 760px; margin: 0 auto; }
+.landing-pagina-conteudo > h1 { font-size: var(--texto-2xl); margin-bottom: var(--esp-3); }
+.landing-pagina-conteudo > p { max-width: 65ch; line-height: 1.6; color: var(--texto-suave); }
+.cartao-formulario {
+  margin-top: var(--esp-5);
+  padding: var(--esp-6);
+  border: 1px solid var(--borda);
+  border-top: 3px solid var(--destaque);
+  border-radius: var(--raio-lg);
+  background: var(--superficie);
+  box-shadow: var(--sombra-1);
+}
+.grade-formulario { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--esp-4); }
+.grade-formulario .campo-largo { grid-column: 1 / -1; }
+.campo-consentimento {
+  display: flex;
+  gap: var(--esp-3);
+  align-items: flex-start;
+  margin-top: var(--esp-5);
+  line-height: 1.5;
+}
+.campo-consentimento input { width: 20px; height: 20px; margin-top: 2px; flex: none; accent-color: var(--destaque-forte); }
+.acoes-formulario { display: flex; flex-wrap: wrap; align-items: center; gap: var(--esp-3); margin-top: var(--esp-5); }
+.obrigatorio { color: var(--perigo); }
+/* honeypot: fora da tela para pessoas (e fora do Tab); robôs preenchem */
+.campo-armadilha { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+.texto-legal h2 { margin: var(--esp-6) 0 var(--esp-2); font-size: var(--texto-lg); }
+.texto-legal p, .texto-legal li { line-height: 1.6; max-width: 70ch; }
+.confirmacao-envio { margin-top: var(--esp-5); }
+.confirmacao-envio:focus { outline: none; }
+
+/* troca obrigatória de senha (mesmo layout do login) */
+.login-cartao .ajuda { margin-top: var(--esp-1); }
+
+/* painel da plataforma */
+.lista-cartoes { display: grid; gap: var(--esp-3); margin: 0; padding: 0; list-style: none; }
+.cartao-solicitacao {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--esp-3) var(--esp-5);
+  align-items: center;
+  padding: var(--esp-4) var(--esp-5);
+  border: 1px solid var(--borda);
+  border-left: 4px solid var(--grafite-300);
+  border-radius: var(--raio-lg);
+  background: var(--superficie);
+}
+.cartao-solicitacao.pendente { border-left-color: var(--destaque); }
+.cartao-solicitacao h3 { margin: 0 0 var(--esp-1); font-size: var(--texto-lg); }
+.cartao-solicitacao dl { display: flex; flex-wrap: wrap; gap: var(--esp-1) var(--esp-5); margin: 0; font-size: var(--texto-sm); }
+.cartao-solicitacao dt { color: var(--texto-suave); }
+.cartao-solicitacao dd { margin: 0; }
+.cartao-solicitacao .acoes { display: flex; gap: var(--esp-2); }
+.senha-temporaria {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--esp-3);
+  margin: var(--esp-3) 0;
+  padding: var(--esp-4);
+  border: 1px dashed var(--destaque-forte);
+  border-radius: var(--raio);
+  background: var(--destaque-suave);
+}
+.senha-temporaria code { font-family: var(--fonte-mono); font-size: var(--texto-xl); font-weight: 600; letter-spacing: 0.06em; user-select: all; }
+.secao-plataforma { padding: var(--esp-5); }
+.secao-plataforma > h2 { margin: 0 0 var(--esp-3); }
+.secao-plataforma .nota-painel { margin: 0 0 var(--esp-4); }
+.secao-plataforma + .secao-plataforma { margin-top: var(--esp-6); }
+.cabecalho-painel { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--esp-3); margin-bottom: var(--esp-3); }
+.cabecalho-painel h2 { margin: 0; }
+
+@media (max-width: 960px) {
+  .landing-pagina { padding: var(--esp-5); }
+  .cartao-formulario { padding: var(--esp-5); }
+  .grade-formulario { grid-template-columns: 1fr; }
+  .cartao-solicitacao { grid-template-columns: 1fr; }
+}
+
+/* =====================================================================
    Telas menores
    ===================================================================== */
 /* em notebook (até 1440 px) o nome do equipamento sai da linha; a tag tem o nome no title */

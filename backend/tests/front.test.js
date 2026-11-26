@@ -25,7 +25,11 @@ describe('front estático e CSP', () => {
     }
     assert.match(html, /MTTR/);
     assert.match(html, /MTBF/);
-    assert.match(html, /sua própria instalação/);
+    // multiempresa (#41): espaço isolado por empresa e "Solicitar acesso" como ação principal
+    assert.match(html, /seu próprio espaço/);
+    assert.match(html, /Row-Level Security/);
+    assert.deepEqual([...html.matchAll(/<a class="botao primario" href="([^"]+)">([^<]+)<\/a>/g)].map((m) => `${m[2]} -> ${m[1]}`),
+      ['Solicitar acesso -> /solicitar-acesso.html', 'Solicitar acesso -> /solicitar-acesso.html']);
     // Entrar => login.html; nenhum link para a raiz como se fosse o login
     assert.ok((html.match(/href="\/login\.html"/g) ?? []).length >= 2, 'botões Entrar');
     // Solicitar demonstração: mailto com assunto e corpo, sem formulário nem gravação de dados
@@ -193,6 +197,51 @@ describe('front estático e CSP', () => {
       assert.match(res.headers['content-type'], tipo, arquivo);
       assert.ok(res.body.includes(assinatura), `${arquivo} é ${assinatura} de verdade`);
       assert.ok(res.body.length < 200 * 1024, `${arquivo} otimizado (< 200 KB)`);
+    }
+  });
+
+  test('solicitar acesso: formulário com honeypot fora do Tab, consentimento obrigatório e só o script próprio', async () => {
+    const pagina = await request(app).get('/solicitar-acesso.html');
+    assert.equal(pagina.status, 200);
+    const html = pagina.text;
+    assert.deepEqual([...html.matchAll(/<script[^>]*>/gi)].map((m) => m[0]), ['<script type="module" src="js/solicitar-acesso.js">']);
+    for (const campo of ['empresa', 'responsavel', 'email', 'cidade', 'uf', 'equipamentos']) {
+      assert.match(html, new RegExp(`<label for="${campo}">`), `rótulo de ${campo}`);
+      assert.match(html, new RegExp(`id="${campo}" name="${campo}"[^>]*required`), `${campo} obrigatório`);
+    }
+    assert.equal((html.match(/<option>[A-Z]{2}<\/option>/g) ?? []).length, 27, 'as 27 UFs');
+    // honeypot: escondido do leitor de tela e fora da ordem do Tab
+    assert.match(html, /<div class="campo-armadilha" aria-hidden="true">\s*<label for="site">[^<]*<\/label>\s*<input id="site" name="site" tabindex="-1" autocomplete="off">/);
+    assert.match(html, /<input id="consentimento" name="consentimento" type="checkbox" required>/);
+    assert.match(html, /<label for="consentimento">Li o <a href="\/privacidade\.html">aviso de privacidade<\/a>/);
+    assert.match(html, /id="confirmacao"[^>]*tabindex="-1"[^>]*hidden/, 'confirmação recebe o foco depois do envio');
+
+    const js = readFileSync(new URL('js/solicitar-acesso.js', PASTA_FRONT), 'utf8');
+    assert.match(js, /api\.post\('\/solicitacoes', corpo\)/);
+    assert.match(js, /consentimento: form\.consentimento\.checked/);
+
+    const privacidade = await request(app).get('/privacidade.html');
+    assert.equal(privacidade.status, 200);
+    assert.doesNotMatch(privacidade.text, /<script[\s>]/i);
+    for (const trecho of ['Quais dados', 'Para quê', 'Base legal', 'Por quanto tempo', 'Seus direitos', 'LGPD']) {
+      assert.match(privacidade.text, new RegExp(trecho), trecho);
+    }
+  });
+
+  test('multiempresa no front: página inicial por perfil, troca obrigatória e menu da plataforma', async () => {
+    const api = readFileSync(new URL('js/api.js', PASTA_FRONT), 'utf8');
+    assert.match(api, /if \(usuario\?\.trocarSenha\) return 'trocar-senha\.html';/);
+    assert.match(api, /usuario\?\.perfil === 'PLATAFORMA' \? 'plataforma\.html' : 'os\.html'/);
+    assert.match(api, /erro\.codigo === 'TROCA_SENHA_OBRIGATORIA'/);
+    const ui = readFileSync(new URL('js/ui.js', PASTA_FRONT), 'utf8');
+    assert.match(ui, /GRUPOS_MENU_PLATAFORMA/);
+    assert.match(ui, /classe: 'menu-empresa'/);
+    const plataforma = readFileSync(new URL('js/plataforma.js', PASTA_FRONT), 'utf8');
+    assert.match(plataforma, /exigirLogin\(\{ plataforma: true \}\)/);
+    assert.match(plataforma, /\$\('senha-temporaria'\)\.textContent = '';/, 'a senha temporária sai da tela ao fechar');
+    for (const pagina of ['/plataforma.html', '/trocar-senha.html']) {
+      const res = await request(app).get(pagina);
+      assert.equal(res.status, 200, pagina);
     }
   });
 

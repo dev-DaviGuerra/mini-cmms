@@ -41,15 +41,40 @@ export function sair(motivo) {
   window.location.replace(destino);
 }
 
+// Página inicial de cada usuário (multiempresa, #41):
+//   senha temporária -> trocar-senha.html (troca obrigatória antes de qualquer outra tela)
+//   PLATAFORMA       -> plataforma.html (não vê as telas das empresas)
+//   empresas         -> os.html
+export function paginaInicial(usuario) {
+  if (usuario?.trocarSenha) return 'trocar-senha.html';
+  return usuario?.perfil === 'PLATAFORMA' ? 'plataforma.html' : 'os.html';
+}
+
+// Depois da troca obrigatória: a sessão continua, sem a marca de senha temporária.
+export function marcarSenhaTrocada() {
+  const usuario = usuarioAtual();
+  if (usuario) sessionStorage.setItem(CHAVE_USUARIO, JSON.stringify({ ...usuario, trocarSenha: false }));
+}
+
+const nuncaResolve = () => new Promise(() => {});
+
 // Usar no início de cada página protegida:  const usuario = await exigirLogin();
 // Sem sessão => vai para o login e devolve uma promessa que nunca se resolve: o resto do
 // script da página simplesmente não roda (sem lançar erro no console).
-export function exigirLogin() {
+// { plataforma: true } nas páginas do PLATAFORMA. Quem cai na página errada (ou ainda tem
+// senha temporária) vai para a própria página inicial. Só conforto: a API responde 403.
+export function exigirLogin({ plataforma = false } = {}) {
   if (!temSessao()) {
     sair();
-    return new Promise(() => {});
+    return nuncaResolve();
   }
-  return Promise.resolve(usuarioAtual());
+  const usuario = usuarioAtual();
+  const ehPlataforma = usuario.perfil === 'PLATAFORMA';
+  if (usuario.trocarSenha || ehPlataforma !== plataforma) {
+    window.location.replace(paginaInicial(usuario));
+    return nuncaResolve();
+  }
+  return Promise.resolve(usuario);
 }
 
 export function jaLogado() {
@@ -79,6 +104,9 @@ async function requisicao(metodo, caminho, corpo) {
   const erro = dados?.erro ?? {};
   if (resposta.status === 401 && token) {
     sair('expirada'); // token expirado/inválido: o servidor não reconhece mais a sessão
+  }
+  if (resposta.status === 403 && erro.codigo === 'TROCA_SENHA_OBRIGATORIA') {
+    window.location.replace('trocar-senha.html'); // senha temporária: troca antes de tudo
   }
   throw new ErroApi(resposta.status, erro.codigo ?? 'ERRO', erro.mensagem ?? `Erro ${resposta.status}`, erro.detalhes);
 }

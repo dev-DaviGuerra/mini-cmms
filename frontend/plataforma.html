@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plataforma · MaintOS</title>
+  <link rel="icon" href="img/logo.svg" type="image/svg+xml">
+  <link rel="preload" href="fontes/ibm-plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="css/estilo.css">
+  <script type="module" src="js/plataforma.js"></script>
+</head>
+<body class="app">
+  <aside id="menu" class="menu-lateral" aria-label="Menu principal"></aside>
+
+  <main class="conteudo">
+    <header class="cabecalho-pagina">
+      <h1>Painel da plataforma</h1>
+    </header>
+
+    <div id="mensagem" role="status" hidden></div>
+
+    <section class="painel secao-plataforma" aria-labelledby="titulo-solicitacoes">
+      <div class="cabecalho-painel">
+        <h2 id="titulo-solicitacoes" tabindex="-1">Solicitações de acesso</h2>
+        <fieldset class="periodo">
+          <legend class="so-leitor-de-tela">Mostrar solicitações</legend>
+          <input type="radio" id="status-pendente" name="status" value="PENDENTE" checked>
+          <label for="status-pendente">Pendentes</label>
+          <input type="radio" id="status-aprovada" name="status" value="APROVADA">
+          <label for="status-aprovada">Aprovadas</label>
+          <input type="radio" id="status-recusada" name="status" value="RECUSADA">
+          <label for="status-recusada">Recusadas</label>
+        </fieldset>
+      </div>
+      <p class="nota-painel">Aprovar cria a empresa e o primeiro supervisor, com uma senha temporária que aparece uma única vez. O painel não mostra nenhum dado operacional das empresas (OS, peças, equipamentos, usuários): o banco não entrega essas linhas ao administrador da plataforma.</p>
+      <ul id="lista-solicitacoes" class="lista-cartoes" aria-live="polite"></ul>
+    </section>
+
+    <section class="painel secao-plataforma" aria-labelledby="titulo-empresas">
+      <h2 id="titulo-empresas">Empresas</h2>
+      <div class="tabela-rolagem">
+        <table class="tabela tabela-simples">
+          <thead>
+            <tr>
+              <th scope="col">Empresa</th>
+              <th scope="col">Cidade/UF</th>
+              <th scope="col">Desde</th>
+              <th scope="col">Situação</th>
+            </tr>
+          </thead>
+          <tbody id="linhas-empresas"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <!-- Drawer "Aprovar": confirmação e, depois, a senha temporária (uma única vez) -->
+  <aside id="drawer-aprovar" class="drawer" role="dialog" aria-modal="true" aria-labelledby="titulo-aprovar" inert>
+    <div class="drawer-form">
+      <div class="drawer-cabecalho">
+        <h2 id="titulo-aprovar">Aprovar solicitação</h2>
+        <button type="button" class="botao secundario icone" data-fechar-drawer aria-label="Fechar painel">×</button>
+      </div>
+      <div class="drawer-corpo">
+        <div id="mensagem-aprovar" role="alert" hidden></div>
+        <div id="passo-confirmar">
+          <p>Será criada a empresa <strong id="aprovar-empresa"></strong>, com <strong id="aprovar-responsavel"></strong> como supervisor (login <span id="aprovar-email" class="mono"></span>).</p>
+        </div>
+        <div id="passo-senha" hidden>
+          <p><strong>Acesso criado.</strong> Envie ao supervisor o login e a senha temporária abaixo. Ela <strong>não será exibida de novo</strong>; no primeiro acesso, o supervisor troca a senha.</p>
+          <div class="senha-temporaria">
+            <code id="senha-temporaria"></code>
+            <button id="copiar-senha" type="button" class="botao secundario">Copiar senha</button>
+          </div>
+          <p class="ajuda">Login: <span id="senha-email" class="mono"></span></p>
+          <p id="aviso-copia-senha" class="ajuda" role="status" aria-live="polite"></p>
+        </div>
+      </div>
+      <div class="drawer-rodape">
+        <button id="botao-cancelar-aprovar" type="button" class="botao secundario" data-fechar-drawer>Cancelar</button>
+        <button id="botao-confirmar-aprovar" type="button" class="botao primario">Aprovar e criar acesso</button>
+        <button id="botao-concluir" type="button" class="botao primario" data-fechar-drawer hidden>Concluir</button>
+      </div>
+    </div>
+  </aside>
+  <div id="fundo-aprovar" class="fundo-drawer"></div>
+
+  <!-- Drawer "Recusar" -->
+  <aside id="drawer-recusar" class="drawer" role="dialog" aria-modal="true" aria-labelledby="titulo-recusar" inert>
+    <form id="form-recusar" class="drawer-form" novalidate>
+      <div class="drawer-cabecalho">
+        <h2 id="titulo-recusar">Recusar solicitação</h2>
+        <button type="button" class="botao secundario icone" data-fechar-drawer aria-label="Fechar painel">×</button>
+      </div>
+      <div class="drawer-corpo">
+        <div id="mensagem-recusar" role="alert" hidden></div>
+        <p>Recusar o pedido de <strong id="recusar-empresa"></strong>?</p>
+        <div class="campo">
+          <label for="motivo">Motivo (opcional)</label>
+          <textarea id="motivo" name="motivo" rows="3" maxlength="300"></textarea>
+          <span class="ajuda">Fica registrado na solicitação. De 3 a 300 caracteres.</span>
+        </div>
+      </div>
+      <div class="drawer-rodape">
+        <button type="button" class="botao secundario" data-fechar-drawer>Cancelar</button>
+        <button type="submit" class="botao secundario perigo">Recusar pedido</button>
+      </div>
+    </form>
+  </aside>
+  <div id="fundo-recusar" class="fundo-drawer"></div>
+</body>
+</html>
