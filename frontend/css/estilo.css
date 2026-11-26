@@ -1040,6 +1040,10 @@ a.indicador.parados.ativo:hover { background: color-mix(in srgb, var(--critico-s
 .landing-hero {
   position: relative;
   overflow: hidden;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  align-items: center;
+  gap: var(--esp-7);
   padding: var(--esp-7) var(--esp-7) calc(var(--esp-7) * 1.5);
   color: var(--grafite-300);
   background:
@@ -1065,6 +1069,35 @@ a.indicador.parados.ativo:hover { background: color-mix(in srgb, var(--critico-s
   opacity: 0.75;
 }
 .landing-hero-texto { position: relative; max-width: 720px; }
+.landing-contato-alt { margin: var(--esp-3) 0 0; font-size: var(--texto-md); color: var(--grafite-300); }
+.landing-contato-alt a { color: var(--branco); }
+
+/* captura real do dashboard, numa moldura discreta de janela de aplicativo */
+.landing-captura { position: relative; margin: 0; }
+.landing-janela {
+  overflow: hidden;
+  border: 1px solid var(--grafite-700);
+  border-radius: var(--raio-lg);
+  background: var(--grafite-800);
+  box-shadow: var(--sombra-2);
+}
+.landing-janela-barra {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: var(--esp-2) var(--esp-3);
+  background: var(--grafite-900);
+  border-bottom: 1px solid var(--grafite-700);
+}
+.landing-janela-ponto { width: 10px; height: 10px; border-radius: 50%; background: var(--grafite-700); }
+.landing-janela-endereco {
+  margin-left: var(--esp-3);
+  font-family: var(--fonte-mono);
+  font-size: var(--texto-xs);
+  color: var(--grafite-400);
+}
+.landing-janela img { display: block; width: 100%; height: auto; }
+.landing-captura figcaption { margin-top: var(--esp-2); font-size: var(--texto-xs); color: var(--grafite-300); }
 .landing-sobretitulo {
   margin: 0 0 var(--esp-3);
   font-family: var(--fonte-mono);
@@ -1131,6 +1164,18 @@ abbr[title] { text-decoration: underline dotted; cursor: help; }
 }
 .landing-empresa p { margin: 0 0 var(--esp-3); max-width: 70ch; line-height: 1.6; }
 .landing-empresa .landing-acoes { margin-top: 0; }
+.landing-email { margin-top: var(--esp-4); }
+.landing-email .landing-email-rotulo {
+  margin: 0 0 var(--esp-1);
+  font-size: var(--texto-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--texto-suave);
+}
+.landing-email-linha { display: flex; flex-wrap: wrap; align-items: center; gap: var(--esp-3); }
+.landing-email-endereco { font-size: var(--texto-lg); font-weight: 500; color: var(--texto); user-select: all; overflow-wrap: anywhere; }
+.landing-email .landing-email-aviso { min-height: 1.5em; margin: var(--esp-2) 0 0; font-size: var(--texto-sm); color: var(--texto-suave); }
 
 .landing-rodape {
   display: flex;
@@ -1150,6 +1195,7 @@ abbr[title] { text-decoration: underline dotted; cursor: help; }
   .landing-topo, .landing-hero, .landing-secao, .landing-rodape { padding-left: var(--esp-5); padding-right: var(--esp-5); }
   .landing-nav { display: none; }
   .landing-entrar { margin-left: auto; }
+  .landing-hero { grid-template-columns: minmax(0, 1fr); gap: var(--esp-6); }
   .landing-hero h1 { font-size: var(--texto-2xl); }
   .landing-cartoes, .landing-passos { grid-template-columns: 1fr; }
   .landing-empresa { grid-template-columns: 1fr; padding: var(--esp-5); }
