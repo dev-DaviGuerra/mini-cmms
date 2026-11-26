@@ -334,7 +334,7 @@ function montarDrawerSenha(botaoOrigem) {
 export function montarLayout(usuario, paginaAtual) {
   const marca = el('a', { classe: 'menu-marca', attrs: { href: 'os.html' } }, [
     el('img', { attrs: { src: 'img/logo.svg', alt: '', width: 30, height: 30 } }),
-    el('span', { texto: 'Mini-CMMS' }),
+    el('span', { texto: 'MaintOS' }),
   ]);
 
   const grupos = [];

@@ -1,5 +1,5 @@
 // =====================================================================
-// Mini-CMMS — seed.js
+// MaintOS — seed.js
 // Popula o banco com dados FICTÍCIOS: 4 usuários, 10 equipamentos,
 // 30 peças e ~200 ordens de serviço distribuídas nos últimos 90 dias.
 //

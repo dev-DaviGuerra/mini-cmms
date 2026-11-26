@@ -1,5 +1,5 @@
 -- =====================================================================
--- Mini-CMMS — 05_usuarios_ativo.sql
+-- MaintOS — 05_usuarios_ativo.sql
 -- Gestão de usuários: coluna "ativo" em usuarios.
 --
 -- Usuário NUNCA é apagado: ordens_servico (aberta_por, tecnico_id), movimentacoes e

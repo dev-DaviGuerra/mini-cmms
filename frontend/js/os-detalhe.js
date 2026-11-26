@@ -46,7 +46,7 @@ function dado(rotulo, valor, { mono = false, largo = false } = {}) {
 }
 
 function renderCabecalho() {
-  document.title = `OS #${os.id} · Mini-CMMS`;
+  document.title = `OS #${os.id} · MaintOS`;
   $('trilha-atual').textContent = `OS #${os.id}`;
   $('os-numero').textContent = `OS #${os.id}`;
   $('os-equipamento').textContent = `${os.equipamento_tag} · ${os.equipamento_nome}`;

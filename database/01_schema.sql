@@ -1,5 +1,5 @@
 -- =====================================================================
--- Mini-CMMS — 01_schema.sql
+-- MaintOS — 01_schema.sql
 -- Tabelas da seção 5 do projeto. Script reexecutável (derruba e recria).
 -- =====================================================================
 
