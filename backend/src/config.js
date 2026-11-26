@@ -39,6 +39,17 @@ export function lerLimiteLogin(valor) {
   return n;
 }
 
+// Número de proxies entre o cliente e a API (trust proxy do Express). Padrão 1: no Render,
+// o balanceador de carga; no desenvolvimento local não há proxy, e o valor não atrapalha.
+export function lerTrustProxy(valor) {
+  if (valor === undefined || valor === '') return 1;
+  const n = Number(valor);
+  if (!Number.isInteger(n) || n < 0 || n > 5) {
+    throw new Error('TRUST_PROXY deve ser um inteiro entre 0 e 5 (número de proxies na frente da API).');
+  }
+  return n;
+}
+
 export const config = Object.freeze({
   emTeste,
   databaseUrl,
@@ -46,4 +57,5 @@ export const config = Object.freeze({
   jwtExpiresIn: '8h',
   port: Number(process.env.PORT) || 3000,
   loginRateLimitMax: lerLimiteLogin(process.env.LOGIN_RATE_LIMIT_MAX),
+  trustProxy: lerTrustProxy(process.env.TRUST_PROXY),
 });
