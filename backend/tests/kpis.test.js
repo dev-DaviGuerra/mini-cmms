@@ -4,9 +4,8 @@ import { test, before, after, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import request from 'supertest';
 import { app } from '../src/app.js';
-import { pool } from '../src/db.js';
 import { separarConsultas, CONSULTAS_BD2 } from '../src/consultasBd2.js';
-import { criarUsuarios, criarEquipamento, criarPeca, removerDados, encerrar, login } from './helpers.js';
+import { pool, criarUsuarios, criarEquipamento, criarPeca, removerDados, encerrar, login } from './helpers.js';
 
 let usuarios;
 let e1; let e2; let e3;
