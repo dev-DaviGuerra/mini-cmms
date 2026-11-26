@@ -77,7 +77,8 @@ async function carregarSolicitacoes() {
 for (const radio of document.querySelectorAll('input[name="status"]')) {
   radio.addEventListener('change', () => {
     statusAtual = radio.value;
-    carregarSolicitacoes();
+    // void: tratador de evento não espera a promessa; os erros já viram mensagem na tela
+    void carregarSolicitacoes();
   });
 }
 
@@ -147,8 +148,7 @@ botaoConfirmar.addEventListener('click', async () => {
     $('botao-concluir').hidden = false;
     $('copiar-senha').focus();
     avisar(`Empresa ${r.empresa.nome} criada.`);
-    carregarSolicitacoes();
-    carregarEmpresas();
+    await Promise.all([carregarSolicitacoes(), carregarEmpresas()]);
   } catch (erro) {
     erroParaTela(caixaAprovar, erro, 'Não foi possível aprovar: ');
     botaoConfirmar.disabled = false;
@@ -200,7 +200,7 @@ formRecusar.addEventListener('submit', async (evento) => {
     await api.post(`/plataforma/solicitacoes/${selecionada.id}/recusar`, motivo ? { motivo } : {});
     drawerRecusar.fechar();
     avisar(`Pedido de ${selecionada.empresa_nome} recusado.`);
-    carregarSolicitacoes();
+    await carregarSolicitacoes();
   } catch (erro) {
     erroParaTela(caixaRecusar, erro, 'Não foi possível recusar: ');
   } finally {
