@@ -9,6 +9,8 @@ import equipamentosRoutes from './routes/equipamentos.js';
 import { pecasRouter, alertasRouter } from './routes/pecas.js';
 import kpisRoutes from './routes/kpis.js';
 import usuariosRoutes from './routes/usuarios.js';
+import plataformaRoutes from './routes/plataforma.js';
+import { criarRotasSolicitacoes } from './routes/solicitacoes.js';
 import { rotaNaoEncontrada, tratarErros } from './middlewares/erros.js';
 import { config } from './config.js';
 
@@ -19,8 +21,13 @@ const ehApi = (req) => req.path === '/api' || req.path.startsWith('/api/');
 const paginaNaoEncontrada = (_req, res) => res.status(404).sendFile('404.html', { root: PASTA_FRONT });
 
 // Monta o app. "producao" só muda a CSP (upgrade-insecure-requests); "trustProxy" é o número
-// de proxies na frente da API. Os testes usam os dois parâmetros para montar o app de produção.
-export function criarApp({ producao = process.env.NODE_ENV === 'production', trustProxy = config.trustProxy } = {}) {
+// de proxies na frente da API; "limiteSolicitacoes" é o máximo de pedidos de acesso por IP
+// por hora. Os testes usam os parâmetros para montar o app de produção e testar o limite.
+export function criarApp({
+  producao = process.env.NODE_ENV === 'production',
+  trustProxy = config.trustProxy,
+  limiteSolicitacoes = config.solicitacaoRateLimitMax,
+} = {}) {
   const app = express();
 
   app.disable('x-powered-by');
@@ -87,6 +94,8 @@ export function criarApp({ producao = process.env.NODE_ENV === 'production', tru
   app.use('/api/alertas', alertasRouter);
   app.use('/api/kpis', kpisRoutes);
   app.use('/api/usuarios', usuariosRoutes);
+  app.use('/api/solicitacoes', criarRotasSolicitacoes({ limite: limiteSolicitacoes }));
+  app.use('/api/plataforma', plataformaRoutes);
 
   app.use(rotaNaoEncontrada);
   app.use(tratarErros);

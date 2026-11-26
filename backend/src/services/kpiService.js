@@ -12,20 +12,19 @@ function numerico(linhas, campos) {
   });
 }
 
-// Período efetivo: sem datas, últimos 90 dias até hoje (data do banco).
-// ::text devolve 'AAAA-MM-DD' (sem isso o pg converte DATE em Date do JS, com fuso horário)
-async function resolverPeriodo({ inicio, fim } = {}) {
-  const { rows } = await query(
-    `SELECT COALESCE($2::date, CURRENT_DATE)::text                            AS fim,
-            COALESCE($1::date, COALESCE($2::date, CURRENT_DATE) - 90)::text   AS inicio`,
-    [inicio ?? null, fim ?? null],
-  );
-  return rows[0];
+// Período efetivo: sem datas, últimos 90 dias até hoje. Calculado aqui, sem uma viagem ao
+// banco só para isso (cada viagem Render -> Neon custa ~110 ms). "Hoje" é a data em UTC,
+// a mesma do CURRENT_DATE do banco (Neon e CI rodam em UTC). Datas no formato 'AAAA-MM-DD'.
+const DIA_MS = 86_400_000;
+const comoData = (ms) => new Date(ms).toISOString().slice(0, 10);
+export function resolverPeriodo({ inicio, fim } = {}, agora = Date.now()) {
+  const fimEfetivo = fim ?? comoData(agora);
+  return { inicio: inicio ?? comoData(Date.parse(fimEfetivo) - 90 * DIA_MS), fim: fimEfetivo };
 }
 
 // KPIs por equipamento no período.
 export async function kpisPorEquipamento(periodo) {
-  const { inicio, fim } = await resolverPeriodo(periodo);
+  const { inicio, fim } = resolverPeriodo(periodo);
   const { rows } = await query(
     `SELECT equipamento_id, tag, nome, linha, n_falhas, mttr_h, mtbf_h, disponibilidade, custo_total
        FROM sp_kpis_equipamento($1::date, $2::date)`,
@@ -54,7 +53,7 @@ export async function resumo() {
 // Consultas BD2: SQL lido de database/04_consultas_bd2.sql (mesmo texto do psql), com o
 // período em $1 e $2. Devolve { inicio, fim, linhas } para o front mostrar o período usado.
 async function consultaBd2(nome, periodo, camposNumericos) {
-  const { inicio, fim } = await resolverPeriodo(periodo);
+  const { inicio, fim } = resolverPeriodo(periodo);
   const { rows } = await query(CONSULTAS_BD2[nome], [inicio, fim]);
   return { inicio, fim, linhas: numerico(rows, camposNumericos) };
 }
