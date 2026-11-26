@@ -9,7 +9,9 @@
   <link rel="preload" href="fontes/ibm-plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="fontes/ibm-plex-sans-600.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="css/estilo.css">
-  <!-- Página pública e estática: sem JavaScript, sem formulário e sem gravar dados. -->
+  <!-- Página pública: sem formulário e sem gravar dados. O único script é o "Copiar e-mail"
+       (melhoria progressiva: sem JavaScript, o e-mail continua visível e o botão fica escondido). -->
+  <script type="module" src="js/landing.js"></script>
 </head>
 <body class="pagina-landing">
   <a class="pular-conteudo" href="#conteudo">Pular para o conteúdo</a>
@@ -37,6 +39,7 @@
           <a class="botao primario" href="mailto:davimguerra@gmail.com?subject=Demonstra%C3%A7%C3%A3o%20do%20MaintOS&amp;body=Ol%C3%A1%2C%0D%0A%0D%0AGostaria%20de%20agendar%20uma%20demonstra%C3%A7%C3%A3o%20do%20MaintOS.%0D%0A%0D%0AEmpresa%3A%0D%0ACidade%2FUF%3A%0D%0AN%C3%BAmero%20aproximado%20de%20equipamentos%3A%0D%0AMelhor%20dia%20e%20hor%C3%A1rio%20para%20contato%3A%0D%0A%0D%0AObrigado.">Solicitar demonstração<span class="so-leitor-de-tela"> (abre o seu programa de e-mail)</span></a>
           <a class="botao no-escuro" href="/login.html">Entrar</a>
         </div>
+        <p class="landing-contato-alt">ou escreva para <a href="mailto:davimguerra@gmail.com?subject=Demonstra%C3%A7%C3%A3o%20do%20MaintOS&amp;body=Ol%C3%A1%2C%0D%0A%0D%0AGostaria%20de%20agendar%20uma%20demonstra%C3%A7%C3%A3o%20do%20MaintOS.%0D%0A%0D%0AEmpresa%3A%0D%0ACidade%2FUF%3A%0D%0AN%C3%BAmero%20aproximado%20de%20equipamentos%3A%0D%0AMelhor%20dia%20e%20hor%C3%A1rio%20para%20contato%3A%0D%0A%0D%0AObrigado.">davimguerra@gmail.com</a></p>
         <ul class="login-modulos" aria-label="Módulos">
           <li>OS</li>
           <li>Estoque</li>
@@ -44,6 +47,23 @@
           <li>MTBF</li>
         </ul>
       </div>
+
+      <figure class="landing-captura">
+        <div class="landing-janela">
+          <div class="landing-janela-barra" aria-hidden="true">
+            <span class="landing-janela-ponto"></span>
+            <span class="landing-janela-ponto"></span>
+            <span class="landing-janela-ponto"></span>
+            <span class="landing-janela-endereco">maintos.com.br/dashboard</span>
+          </div>
+          <picture>
+            <source srcset="img/dashboard.webp" type="image/webp">
+            <img src="img/dashboard.png" width="1600" height="1000" fetchpriority="high"
+                 alt="Tela do Dashboard do MaintOS. No topo, os cartões do momento: 2 OS abertas, 1 em andamento e 3 máquinas paradas. No período de 90 dias: 148 falhas, MTTR médio de 8,9 horas, disponibilidade média de 94,0% e custo de manutenção de R$ 175.188,10. Abaixo, um gráfico de barras com o MTTR de cada equipamento e um gráfico de pontos com a disponibilidade de cada um, entre 92% e 96%.">
+          </picture>
+        </div>
+        <figcaption>Tela real do sistema, com os dados fictícios do projeto.</figcaption>
+      </figure>
     </section>
 
     <section id="o-que-faz" class="landing-secao" aria-labelledby="titulo-o-que-faz">
@@ -94,6 +114,14 @@
           <h2 id="titulo-para-sua-empresa">Para sua empresa</h2>
           <p>Hoje, cada fábrica recebe a <strong>sua própria instalação</strong> do MaintOS: servidor, banco de dados e endereço exclusivos. Os dados de uma empresa nunca dividem banco com os de outra, e os usuários e perfis (operador, técnico, supervisor) são cadastrados pelo supervisor da própria fábrica.</p>
           <p>Quer ver o sistema funcionando com os seus equipamentos? Peça uma demonstração.</p>
+          <div class="landing-email">
+            <p class="landing-email-rotulo">E-mail para contato</p>
+            <div class="landing-email-linha">
+              <span id="email-contato" class="landing-email-endereco mono">davimguerra@gmail.com</span>
+              <button type="button" id="copiar-email" class="botao secundario" hidden>Copiar e-mail</button>
+            </div>
+            <p id="aviso-copia" class="landing-email-aviso" role="status" aria-live="polite"></p>
+          </div>
         </div>
         <div class="landing-acoes">
           <a class="botao primario" href="mailto:davimguerra@gmail.com?subject=Demonstra%C3%A7%C3%A3o%20do%20MaintOS&amp;body=Ol%C3%A1%2C%0D%0A%0D%0AGostaria%20de%20agendar%20uma%20demonstra%C3%A7%C3%A3o%20do%20MaintOS.%0D%0A%0D%0AEmpresa%3A%0D%0ACidade%2FUF%3A%0D%0AN%C3%BAmero%20aproximado%20de%20equipamentos%3A%0D%0AMelhor%20dia%20e%20hor%C3%A1rio%20para%20contato%3A%0D%0A%0D%0AObrigado.">Solicitar demonstração<span class="so-leitor-de-tela"> (abre o seu programa de e-mail)</span></a>
