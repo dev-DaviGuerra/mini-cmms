@@ -5,7 +5,7 @@ import { test, before, after, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import pg from 'pg';
 import { config } from '../src/config.js';
-import { configConexao } from '../src/db.js';
+import { configConexao, verificarPapelSemBypass } from '../src/db.js';
 import {
   pool, criarEmpresaDeTeste, criarUsuarios, criarEquipamento, criarPeca, encerrar, EMPRESA_ID,
 } from './helpers.js';
@@ -59,6 +59,11 @@ describe('papel e tabelas', () => {
     const dono = await contar(
       "SELECT COUNT(*)::int AS n FROM pg_tables WHERE schemaname = 'public' AND tableowner = current_user");
     assert.equal(dono, 0, 'maintos_app não é dono de nenhuma tabela');
+  });
+
+  test('a API se recusa a subir com o dono (BYPASSRLS) e sobe com o maintos_app', async () => {
+    await verificarPapelSemBypass(app);
+    await assert.rejects(verificarPapelSemBypass(pool), /ignora a Row-Level Security/);
   });
 
   test('RLS ligada e FORCE em todas as tabelas de negócio e nas da plataforma', async () => {

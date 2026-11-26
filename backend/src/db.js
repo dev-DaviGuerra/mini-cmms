@@ -116,8 +116,8 @@ export function transacao(fn) {
 
 // O papel da API não pode ignorar a RLS (superusuário ou BYPASSRLS): senão o isolamento
 // entre empresas desaparece em silêncio. Chamado pelo server.js antes de subir.
-export async function verificarPapelSemBypass() {
-  const { rows } = await pool.query(
+export async function verificarPapelSemBypass(conexao = pool) {
+  const { rows } = await conexao.query(
     'SELECT current_user AS papel, rolsuper OR rolbypassrls AS ignora_rls FROM pg_roles WHERE rolname = current_user',
   );
   if (rows[0].ignora_rls) {

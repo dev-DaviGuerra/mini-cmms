@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import request from 'supertest';
 import { app, criarApp } from '../src/app.js';
-import { lerLimiteLogin, lerTrustProxy } from '../src/config.js';
+import { lerLimiteLogin, lerLimiteSolicitacoes, lerTrustProxy } from '../src/config.js';
 import { encerrar } from './helpers.js';
 
 after(encerrar);
@@ -351,6 +351,17 @@ describe('LOGIN_RATE_LIMIT_MAX', () => {
     assert.equal(lerLimiteLogin('100'), 100);
     for (const ruim of ['0', '-5', 'abc', '2.5', '20000']) {
       assert.throws(() => lerLimiteLogin(ruim), /LOGIN_RATE_LIMIT_MAX/, ruim);
+    }
+  });
+});
+
+describe('SOLICITACAO_RATE_LIMIT_MAX', () => {
+  test('padrão 5 pedidos por IP por hora; aceita inteiro de 1 a 10000; recusa valor inválido', () => {
+    assert.equal(lerLimiteSolicitacoes(undefined), 5);
+    assert.equal(lerLimiteSolicitacoes(''), 5);
+    assert.equal(lerLimiteSolicitacoes('30'), 30);
+    for (const ruim of ['0', '-1', 'x', '1.5', '10001']) {
+      assert.throws(() => lerLimiteSolicitacoes(ruim), /SOLICITACAO_RATE_LIMIT_MAX/, ruim);
     }
   });
 });
