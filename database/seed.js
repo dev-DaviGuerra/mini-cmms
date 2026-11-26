@@ -1,11 +1,16 @@
 // =====================================================================
 // MaintOS — seed.js
-// Popula o banco com dados FICTÍCIOS: 4 usuários, 10 equipamentos,
-// 30 peças e ~200 ordens de serviço distribuídas nos últimos 90 dias.
+// Popula o banco com dados FICTÍCIOS de DUAS empresas (multiempresa, #41):
+//   Empresa Demonstração: 4 usuários, 10 equipamentos, 30 peças, ~200 OS em 90 dias;
+//   Metalúrgica Exemplo:  3 usuários, 6 equipamentos (tags repetidas de propósito,
+//                         como R-01), 30 peças e as próprias OS;
+// mais o administrador da plataforma (PLATAFORMA) e 2 solicitações de acesso pendentes.
 //
-// Uso:  cd database && npm install && npm run seed
-// Lê DATABASE_URL e SEED_PASSWORD de backend/.env.
-// Pré-requisito: 01_schema.sql, 02_triggers.sql e 03_procedures.sql aplicados.
+// Uso:  cd database && npm install && npm run seed          (banco de desenvolvimento)
+//       npm run seed:teste                                  (banco de teste, cmms_test)
+// Lê DATABASE_URL_ADMIN (ou DATABASE_URL_TEST_ADMIN) e SEED_PASSWORD de backend/.env: o
+// seed precisa do DONO das tabelas, porque apaga e recria tudo (TRUNCATE).
+// Pré-requisito: 01, 02, 03, 05 e 06 aplicados.
 //
 // O gerador aleatório tem semente fixa: toda execução gera os mesmos dados,
 // o que ajuda a ensaiar a apresentação.
@@ -19,9 +24,11 @@ import bcrypt from 'bcrypt';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, '..', 'backend', '.env') });
 
-const { DATABASE_URL, SEED_PASSWORD } = process.env;
+const CHAVE_URL = process.argv.includes('--teste') ? 'DATABASE_URL_TEST_ADMIN' : 'DATABASE_URL_ADMIN';
+const DATABASE_URL = process.env[CHAVE_URL];
+const { SEED_PASSWORD } = process.env;
 if (!DATABASE_URL || !SEED_PASSWORD) {
-  console.error('Defina DATABASE_URL e SEED_PASSWORD em backend/.env (veja .env.example).');
+  console.error(`Defina ${CHAVE_URL} e SEED_PASSWORD em backend/.env (veja .env.example).`);
   process.exit(1);
 }
 
@@ -65,15 +72,9 @@ const HORA = 3600 * 1000;
 // ---------------------------------------------------------------------
 // Dados fictícios
 // ---------------------------------------------------------------------
-const USUARIOS = [
-  ['Olga Operadora', 'operador@cmms.local', 'OPERADOR'],
-  ['Tiago Técnico', 'tecnico@cmms.local', 'TECNICO'],
-  ['Tânia Técnica', 'tecnico2@cmms.local', 'TECNICO'],
-  ['Sérgio Supervisor', 'supervisor@cmms.local', 'SUPERVISOR'],
-];
 
 // [tag, nome, linha, criticidade, falhas esperadas em 90 dias]
-const EQUIPAMENTOS = [
+const EQUIPAMENTOS_DEMO = [
   ['R-01', 'Robô de solda 01', 'Linha 1 - Soldagem', 'A', 24],
   ['R-02', 'Robô de solda 02', 'Linha 1 - Soldagem', 'A', 20],
   ['R-03', 'Robô de solda 03', 'Linha 1 - Soldagem', 'A', 28],
@@ -131,8 +132,6 @@ const PECAS_POR_TIPO = {
   CLD: ['TER-PT100', 'VAL-SOL', 'VAL-ALV', 'CON-25A', 'REL-TER', 'FUS-10A'],
 };
 
-// Equipamentos que terminam o seed com uma OS ABERTA (R-03 fica livre para a demo)
-const TAGS_COM_OS_ABERTA = ['PH-02', 'TC-01', 'EST-01'];
 
 // Causas com pesos desiguais, para o Pareto ter "poucas vitais"
 const CAUSAS = [
@@ -175,13 +174,60 @@ const DESCRICOES_PREVENTIVA = [
   'Preventiva: verificação de folgas e alinhamento',
 ];
 
+// Mesmas tags R-01, PH-01, TC-01... da outra empresa: a unicidade é por empresa.
+const EQUIPAMENTOS_METALURGICA = [
+  ['R-01', 'Robô de solda 01', 'Linha A - Soldagem', 'A', 18],
+  ['PH-01', 'Prensa hidráulica 01', 'Linha B - Estamparia', 'A', 22],
+  ['TC-01', 'Torno CNC 01', 'Linha C - Usinagem', 'B', 14],
+  ['TC-02', 'Torno CNC 02', 'Linha C - Usinagem', 'B', 12],
+  ['CP-01', 'Compressor de ar 01', 'Utilidades', 'A', 10],
+  ['EST-01', 'Esteira de expedição 01', 'Expedição', 'C', 8],
+];
+
+// Empresas fictícias. tagsComOsAberta: equipamentos que terminam o seed com uma OS ABERTA
+// (na Demonstração, o R-03 fica livre para a demo). pecasNoMinimo: peças que terminam
+// exatamente no mínimo, para a próxima baixa disparar a trigger trg_estoque_minimo.
+const EMPRESAS = [
+  {
+    nome: 'Empresa Demonstração', cidade: 'Rio de Janeiro', uf: 'RJ',
+    usuarios: [
+      ['Olga Operadora', 'operador@cmms.local', 'OPERADOR'],
+      ['Tiago Técnico', 'tecnico@cmms.local', 'TECNICO'],
+      ['Tânia Técnica', 'tecnico2@cmms.local', 'TECNICO'],
+      ['Sérgio Supervisor', 'supervisor@cmms.local', 'SUPERVISOR'],
+    ],
+    equipamentos: EQUIPAMENTOS_DEMO,
+    tagsComOsAberta: ['PH-02', 'TC-01', 'EST-01'],
+    pecasNoMinimo: ['ROL-6205', 'SEN-IND12', 'VED-HID50'],
+  },
+  {
+    nome: 'Metalúrgica Exemplo', cidade: 'Joinville', uf: 'SC',
+    usuarios: [
+      ['Otávio Operador', 'operador@metalurgica.local', 'OPERADOR'],
+      ['Telma Técnica', 'tecnico@metalurgica.local', 'TECNICO'],
+      ['Sílvia Supervisora', 'supervisor@metalurgica.local', 'SUPERVISOR'],
+    ],
+    equipamentos: EQUIPAMENTOS_METALURGICA,
+    tagsComOsAberta: ['PH-01', 'TC-02'],
+    pecasNoMinimo: ['PAS-FRE'],
+  },
+];
+
+const PLATAFORMA = ['Paula Plataforma', 'plataforma@maintos.local'];
+
+// Pedidos de acesso fictícios (domínios .example não existem), para a demo do painel
+const SOLICITACOES = [
+  ['Fundição Serra Azul', 'Renato Lima', 'contato@fundicao-serra-azul.example', 'Caxias do Sul', 'RS', 35],
+  ['Plásticos Vale Verde', 'Carla Souza', 'manutencao@valeverde-plasticos.example', 'Sorocaba', 'SP', 60],
+];
+
 // ---------------------------------------------------------------------
 // Geração das OS em memória
 // Para cada equipamento, a linha do tempo anda para frente: falha → reparo
 // → próxima falha. Assim as OS de um mesmo equipamento nunca se sobrepõem,
 // o que mantém o cálculo de MTBF coerente.
 // ---------------------------------------------------------------------
-function gerarOrdens(agora, equipamentos, idsOperadores, idsTecnicos, pecasPorCodigo) {
+function gerarOrdens(agora, equipamentos, idsOperadores, idsTecnicos, pecasPorCodigo, tagsComOsAberta) {
   const inicio = agora - 90 * 24 * HORA;
   const ordens = [];
 
@@ -246,7 +292,7 @@ function gerarOrdens(agora, equipamentos, idsOperadores, idsTecnicos, pecasPorCo
 
     // Alguns equipamentos terminam com uma OS recém-aberta, aguardando técnico
     const ultima = ordens[ordens.length - 1];
-    if (TAGS_COM_OS_ABERTA.includes(eq.tag) && ultima.status === 'FECHADA') {
+    if (tagsComOsAberta.includes(eq.tag) && ultima.status === 'FECHADA') {
       ordens.push({
         equipamentoId: eq.id,
         abertaPor: escolher(idsOperadores),
@@ -272,119 +318,141 @@ function gerarOrdens(agora, equipamentos, idsOperadores, idsTecnicos, pecasPorCo
 // ---------------------------------------------------------------------
 // Execução
 // ---------------------------------------------------------------------
+// Uma empresa: o contexto app.empresa_id da transação faz o DEFAULT de empresa_id de cada
+// tabela (e das linhas geradas pelas triggers) apontar para ela.
+async function popularEmpresa(client, empresa, senhaHash, agora) {
+  const { rows: [{ id: empresaId }] } = await client.query(
+    'INSERT INTO empresas (nome, cidade, uf) VALUES ($1, $2, $3) RETURNING id',
+    [empresa.nome, empresa.cidade, empresa.uf],
+  );
+  await client.query("SELECT set_config('app.empresa_id', $1, true)", [String(empresaId)]);
+
+  // Usuários
+  const usuarios = [];
+  for (const [nome, email, perfil] of empresa.usuarios) {
+    const { rows } = await client.query(
+      'INSERT INTO usuarios (nome, email, senha_hash, perfil) VALUES ($1, $2, $3, $4) RETURNING id, perfil',
+      [nome, email, senhaHash, perfil],
+    );
+    usuarios.push(rows[0]);
+  }
+  const idsDoPerfil = (p) => usuarios.filter((u) => u.perfil === p).map((u) => u.id);
+  const idsOperadores = idsDoPerfil('OPERADOR');
+  const idsTecnicos = idsDoPerfil('TECNICO');
+  const idSupervisor = idsDoPerfil('SUPERVISOR')[0];
+
+  // Equipamentos
+  const equipamentos = [];
+  for (const [tag, nome, linha, criticidade, falhasEsperadas] of empresa.equipamentos) {
+    const { rows } = await client.query(
+      'INSERT INTO equipamentos (tag, nome, linha, criticidade) VALUES ($1, $2, $3, $4) RETURNING id',
+      [tag, nome, linha, criticidade],
+    );
+    equipamentos.push({ id: rows[0].id, tag, criticidade, falhasEsperadas });
+  }
+
+  // Peças: inseridas com estoque 0; o estoque final é calculado abaixo
+  const pecasPorCodigo = {};
+  for (const [codigo, descricao, estoqueMin, custoUnit] of PECAS) {
+    const { rows } = await client.query(
+      'INSERT INTO pecas (codigo, descricao, estoque_min, custo_unit) VALUES ($1, $2, $3, $4) RETURNING id',
+      [codigo, descricao, estoqueMin, custoUnit],
+    );
+    pecasPorCodigo[codigo] = { id: rows[0].id, codigo, estoqueMin, custoUnit, consumo: 0 };
+  }
+
+  // Ordens de serviço
+  const ordens = gerarOrdens(agora, equipamentos, idsOperadores, idsTecnicos, pecasPorCodigo, empresa.tagsComOsAberta);
+  for (const os of ordens) {
+    const { rows } = await client.query(
+      `INSERT INTO ordens_servico (equipamento_id, aberta_por, tecnico_id, tipo, prioridade, status,
+                                   descricao, causa, solucao, aberta_em, iniciada_em, fechada_em, horas)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`,
+      [os.equipamentoId, os.abertaPor, os.tecnicoId, os.tipo, os.prioridade, os.status,
+        os.descricao, os.causa, os.solucao, os.abertaEm, os.iniciadaEm, os.fechadaEm, os.horas],
+    );
+    const osId = rows[0].id;
+
+    for (const { peca, qtd } of os.pecas) {
+      await client.query(
+        'INSERT INTO os_pecas (os_id, peca_id, qtd, custo_unit) VALUES ($1, $2, $3, $4)',
+        [osId, peca.id, qtd, peca.custoUnit],
+      );
+      await client.query(
+        `INSERT INTO movimentacoes (peca_id, tipo, qtd, os_id, usuario_id, data)
+         VALUES ($1, 'SAIDA', $2, $3, $4, $5)`,
+        [peca.id, qtd, osId, os.tecnicoId, os.fechadaEm],
+      );
+      peca.consumo += qtd;
+    }
+  }
+
+  // Equipamentos com OS em aberto ficam PARADOS
+  await client.query(`
+    UPDATE equipamentos SET status = 'PARADO'
+     WHERE empresa_id = $1
+       AND id IN (SELECT equipamento_id FROM ordens_servico
+                   WHERE status IN ('ABERTA', 'EM_ANDAMENTO', 'AGUARDANDO_PECA'))`, [empresaId]);
+
+  // Estoque: uma ENTRADA inicial há 90 dias cobre o consumo + saldo final.
+  const pecasNoMinimo = new Set(empresa.pecasNoMinimo);
+  const dataEntrada = new Date(agora - 90 * 24 * HORA - HORA);
+  for (const peca of Object.values(pecasPorCodigo)) {
+    const saldoFinal = pecasNoMinimo.has(peca.codigo)
+      ? peca.estoqueMin
+      : peca.estoqueMin + inteiro(2, peca.estoqueMin * 3 + 5);
+    await client.query(
+      `INSERT INTO movimentacoes (peca_id, tipo, qtd, usuario_id, data)
+       VALUES ($1, 'ENTRADA', $2, $3, $4)`,
+      [peca.id, peca.consumo + saldoFinal, idSupervisor, dataEntrada],
+    );
+    // INSERT de peça não dispara trg_estoque_minimo; aqui o estoque sobe (0 → saldo),
+    // então o UPDATE também não cruza o mínimo para baixo.
+    await client.query('UPDATE pecas SET estoque = $1 WHERE id = $2', [saldoFinal, peca.id]);
+  }
+}
+
 async function main() {
   const client = new pg.Client(configConexao(DATABASE_URL));
   await client.connect();
 
   try {
     await client.query('BEGIN');
-    await client.query(`TRUNCATE os_auditoria, alertas_estoque, movimentacoes, os_pecas,
-                        ordens_servico, pecas, equipamentos, usuarios RESTART IDENTITY CASCADE`);
+    await client.query(`TRUNCATE os_auditoria, alertas_estoque, movimentacoes, os_pecas, ordens_servico,
+                        pecas, equipamentos, usuarios, solicitacoes_acesso, usuarios_plataforma, empresas
+                        RESTART IDENTITY CASCADE`);
 
-    // Usuários
     const senhaHash = await bcrypt.hash(SEED_PASSWORD, 10);
-    const usuarios = [];
-    for (const [nome, email, perfil] of USUARIOS) {
-      const { rows } = await client.query(
-        'INSERT INTO usuarios (nome, email, senha_hash, perfil) VALUES ($1, $2, $3, $4) RETURNING id, perfil',
-        [nome, email, senhaHash, perfil],
-      );
-      usuarios.push(rows[0]);
-    }
-    const idsDoPerfil = (p) => usuarios.filter((u) => u.perfil === p).map((u) => u.id);
-    const idsOperadores = idsDoPerfil('OPERADOR');
-    const idsTecnicos = idsDoPerfil('TECNICO');
-    const idSupervisor = idsDoPerfil('SUPERVISOR')[0];
-
-    // Equipamentos
-    const equipamentos = [];
-    for (const [tag, nome, linha, criticidade, falhasEsperadas] of EQUIPAMENTOS) {
-      const { rows } = await client.query(
-        'INSERT INTO equipamentos (tag, nome, linha, criticidade) VALUES ($1, $2, $3, $4) RETURNING id',
-        [tag, nome, linha, criticidade],
-      );
-      equipamentos.push({ id: rows[0].id, tag, criticidade, falhasEsperadas });
-    }
-
-    // Peças: inseridas com estoque 0; o estoque final é calculado abaixo
-    const pecasPorCodigo = {};
-    for (const [codigo, descricao, estoqueMin, custoUnit] of PECAS) {
-      const { rows } = await client.query(
-        'INSERT INTO pecas (codigo, descricao, estoque_min, custo_unit) VALUES ($1, $2, $3, $4) RETURNING id',
-        [codigo, descricao, estoqueMin, custoUnit],
-      );
-      pecasPorCodigo[codigo] = { id: rows[0].id, codigo, estoqueMin, custoUnit, consumo: 0 };
-    }
-
-    // Ordens de serviço
     const agora = Date.now();
-    const ordens = gerarOrdens(agora, equipamentos, idsOperadores, idsTecnicos, pecasPorCodigo);
+    for (const empresa of EMPRESAS) await popularEmpresa(client, empresa, senhaHash, agora);
 
-    for (const os of ordens) {
-      const { rows } = await client.query(
-        `INSERT INTO ordens_servico (equipamento_id, aberta_por, tecnico_id, tipo, prioridade, status,
-                                     descricao, causa, solucao, aberta_em, iniciada_em, fechada_em, horas)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`,
-        [os.equipamentoId, os.abertaPor, os.tecnicoId, os.tipo, os.prioridade, os.status,
-          os.descricao, os.causa, os.solucao, os.abertaEm, os.iniciadaEm, os.fechadaEm, os.horas],
-      );
-      const osId = rows[0].id;
-
-      for (const { peca, qtd } of os.pecas) {
-        await client.query(
-          'INSERT INTO os_pecas (os_id, peca_id, qtd, custo_unit) VALUES ($1, $2, $3, $4)',
-          [osId, peca.id, qtd, peca.custoUnit],
-        );
-        await client.query(
-          `INSERT INTO movimentacoes (peca_id, tipo, qtd, os_id, usuario_id, data)
-           VALUES ($1, 'SAIDA', $2, $3, $4, $5)`,
-          [peca.id, qtd, osId, os.tecnicoId, os.fechadaEm],
-        );
-        peca.consumo += qtd;
-      }
-    }
-
-    // Equipamentos com OS em aberto ficam PARADOS
-    await client.query(`
-      UPDATE equipamentos SET status = 'PARADO'
-       WHERE id IN (SELECT equipamento_id FROM ordens_servico
-                     WHERE status IN ('ABERTA', 'EM_ANDAMENTO', 'AGUARDANDO_PECA'))`);
-
-    // Estoque: uma ENTRADA inicial há 90 dias cobre o consumo + saldo final.
-    // As 3 primeiras peças ficam exatamente no mínimo: a próxima baixa dispara
-    // a trigger trg_estoque_minimo (útil na demo).
-    const pecasNoMinimo = new Set(['ROL-6205', 'SEN-IND12', 'VED-HID50']);
-    const dataEntrada = new Date(agora - 90 * 24 * HORA - HORA);
-    for (const peca of Object.values(pecasPorCodigo)) {
-      const saldoFinal = pecasNoMinimo.has(peca.codigo)
-        ? peca.estoqueMin
-        : peca.estoqueMin + inteiro(2, peca.estoqueMin * 3 + 5);
-      const entrada = peca.consumo + saldoFinal;
+    // Administrador da plataforma (fora das empresas) e pedidos de acesso pendentes
+    await client.query("SELECT set_config('app.empresa_id', '', true)");
+    await client.query('INSERT INTO usuarios_plataforma (nome, email, senha_hash) VALUES ($1, $2, $3)',
+      [...PLATAFORMA, senhaHash]);
+    for (const [empresa, responsavel, email, cidade, uf, equipamentos] of SOLICITACOES) {
       await client.query(
-        `INSERT INTO movimentacoes (peca_id, tipo, qtd, usuario_id, data)
-         VALUES ($1, 'ENTRADA', $2, $3, $4)`,
-        [peca.id, entrada, idSupervisor, dataEntrada],
+        `INSERT INTO solicitacoes_acesso (empresa_nome, responsavel, email, cidade, uf, equipamentos_aprox,
+                                          consentimento_em, termo_versao, criada_em)
+         VALUES ($1, $2, $3, $4, $5, $6, now() - interval '1 day', '2026-11', now() - interval '1 day')`,
+        [empresa, responsavel, email, cidade, uf, equipamentos],
       );
-      // INSERT de peça não dispara trg_estoque_minimo; aqui o estoque sobe (0 → saldo),
-      // então o UPDATE também não cruza o mínimo para baixo.
-      await client.query('UPDATE pecas SET estoque = $1 WHERE id = $2', [saldoFinal, peca.id]);
     }
 
     await client.query('COMMIT');
 
-    // Resumo
+    // Resumo por empresa
     const resumo = await client.query(`
-      SELECT (SELECT COUNT(*) FROM usuarios)       AS usuarios,
-             (SELECT COUNT(*) FROM equipamentos)   AS equipamentos,
-             (SELECT COUNT(*) FROM pecas)          AS pecas,
-             (SELECT COUNT(*) FROM ordens_servico) AS ordens_servico,
-             (SELECT COUNT(*) FROM os_pecas)       AS os_pecas,
-             (SELECT COUNT(*) FROM movimentacoes)  AS movimentacoes`);
-    const porStatus = await client.query(
-      'SELECT status, COUNT(*)::int AS qtd FROM ordens_servico GROUP BY status ORDER BY status');
-    console.log('Seed concluído:');
-    console.table(resumo.rows[0]);
-    console.table(porStatus.rows);
+      SELECT e.id, e.nome,
+             (SELECT COUNT(*) FROM usuarios u WHERE u.empresa_id = e.id)::int        AS usuarios,
+             (SELECT COUNT(*) FROM equipamentos q WHERE q.empresa_id = e.id)::int    AS equipamentos,
+             (SELECT COUNT(*) FROM pecas p WHERE p.empresa_id = e.id)::int           AS pecas,
+             (SELECT COUNT(*) FROM ordens_servico o WHERE o.empresa_id = e.id)::int  AS ordens_servico,
+             (SELECT COUNT(*) FROM ordens_servico o WHERE o.empresa_id = e.id AND o.status = 'ABERTA')::int AS abertas
+        FROM empresas e ORDER BY e.id`);
+    console.log(`Seed concluído (${CHAVE_URL}):`);
+    console.table(resumo.rows);
+    console.log('Plataforma: 1 administrador e', SOLICITACOES.length, 'solicitações pendentes.');
   } catch (erro) {
     await client.query('ROLLBACK');
     console.error('Seed falhou, nada foi gravado (ROLLBACK):', erro.message);
