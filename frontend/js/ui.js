@@ -102,6 +102,47 @@ export function estadoVazio({ titulo, texto, acao }) {
   return el('div', { classe: 'estado-vazio' }, filhos);
 }
 
+// Tooltips ⓘ (.info-dica > .botao-info + [role=tooltip]). O CSS mostra o texto no hover e no
+// foco; aqui ficam o que o CSS não faz sozinho:
+//   - Esc fecha o tooltip aberto sem tirar o foco do botão (WCAG 1.4.13);
+//   - um toque/clique foca o botão (no Safari, clicar num botão não o foca), e o texto abre;
+//   - ao abrir, o texto é deslocado na horizontal para não sair da janela (tela estreita).
+// A classe dica-fechada sai quando o ponteiro deixa o bloco ou o foco vai para outro lugar.
+const MARGEM_DICA = 8; // px até a borda da janela
+
+function manterNaJanela(dica) {
+  dica.style.setProperty('--dica-desloca', '0px'); // mede na posição original
+  const { left, right } = dica.getBoundingClientRect();
+  const limite = document.documentElement.clientWidth - MARGEM_DICA;
+  let desloca = 0;
+  if (right > limite) desloca = limite - right;
+  if (left + desloca < MARGEM_DICA) desloca = MARGEM_DICA - left;
+  dica.style.setProperty('--dica-desloca', `${Math.round(desloca)}px`);
+}
+
+export function ativarDicas(raiz = document) {
+  const blocos = [...raiz.querySelectorAll('.info-dica')];
+  for (const bloco of blocos) {
+    const dica = bloco.querySelector('[role="tooltip"]');
+    const abrir = () => { if (dica) manterNaJanela(dica); };
+    const reabrir = () => bloco.classList.remove('dica-fechada');
+    bloco.addEventListener('mouseenter', abrir);
+    bloco.addEventListener('focusin', abrir);
+    bloco.querySelector('.botao-info')?.addEventListener('click', (evento) => {
+      evento.currentTarget.focus();
+      reabrir();
+    });
+    bloco.addEventListener('mouseleave', reabrir);
+    bloco.addEventListener('focusout', reabrir);
+  }
+  document.addEventListener('keydown', (evento) => {
+    if (evento.key !== 'Escape') return;
+    for (const bloco of blocos) {
+      if (bloco.matches(':hover, :focus-within')) bloco.classList.add('dica-fechada');
+    }
+  });
+}
+
 // Drawer modal (painel lateral). Reaproveitado por todas as telas:
 //   const d = criarDrawer({ drawer, fundo, botaoOrigem, primeiroCampo, aoFechar });
 //   d.abrir();  d.fechar();  d.aberto()
