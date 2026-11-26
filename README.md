@@ -239,6 +239,21 @@ pelo cliente no começo do cabeçalho não muda o contador (há teste). Em produ
 `upgrade-insecure-requests`, e o helmet envia HSTS, `nosniff`, `X-Frame-Options` e
 `Referrer-Policy`.
 
+O Render não documenta quantos proxies existem antes do Node. Por isso, conferir depois do
+deploy que o `TRUST_PROXY=1` está certo, olhando o cabeçalho `RateLimit` (`remaining=` é o
+que sobra da cota do IP):
+
+```bash
+# 1) da sua rede, duas vezes: remaining cai de 1 em 1 (299, 298...)
+curl -s -o /dev/null -D - https://maintos.com.br/api/nao-existe | grep -i '^ratelimit:'
+# 2) de outra rede (ex.: 4G do celular): remaining começa de novo em 299
+#    Se continuar a sequência da sua rede, todos os clientes dividem o mesmo contador:
+#    aumentar TRUST_PROXY para 2 no painel e repetir.
+# 3) forjando um IP: remaining continua a sequência da sua rede (o forjado é ignorado)
+curl -s -o /dev/null -D - -H 'X-Forwarded-For: 1.2.3.4' https://maintos.com.br/api/nao-existe | grep -i '^ratelimit:'
+#    Se voltar para 299, o valor está alto demais: diminuir TRUST_PROXY.
+```
+
 **Cold start do plano free:** depois de 15 minutos sem requisições o Render desliga a
 instância. A próxima requisição a liga de novo, o que leva cerca de 1 minuto, e por isso a
 primeira página demora. O Neon também suspende o banco quando ele fica ocioso, e a primeira
