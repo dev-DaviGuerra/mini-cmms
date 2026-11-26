@@ -479,6 +479,42 @@ O MaintOS é um sistema **interno** de uma fábrica, não um serviço público. 
 
 ---
 
+## Landing page pública (issue #37)
+
+**O que foi feito**
+
+1. A raiz `maintos.com.br` passou a abrir uma **landing page pública** do MaintOS, com o mesmo visual do sistema (design tokens, CSP sem `unsafe-inline`, sem CDN). Ela tem as seções hero, "O que o sistema faz", "Como funciona" e "Para sua empresa".
+2. A página é **estática**: sem JavaScript, sem formulário e sem gravar dados. "Solicitar demonstração" é um link `mailto:` com assunto e corpo prontos, que abre o programa de e-mail de quem visita.
+3. O login saiu de `index.html` para **`login.html`**. O 401 (sessão expirada), o "Sair" e a página 404 levam para lá, e um teste falha se algum JS voltar a apontar para `index.html`.
+4. **Acessibilidade:** link "Pular para o conteúdo" no primeiro Tab, regiões `header`/`nav`/`main`/`footer`, um único `h1`, `abbr` para MTTR e MTBF, texto extra para leitor de tela no botão de e-mail e contraste de pelo menos 4,5:1 nos textos (medido no navegador). Em telas estreitas, o layout vira uma coluna, sem rolagem horizontal.
+5. O README e este caderno registram a evolução para **multi-tenant (SaaS)** como trabalho futuro (abaixo).
+
+**Perguntas prováveis**
+
+1. *Por que "Solicitar demonstração" é um `mailto:` e não um formulário?*
+   Um formulário exigiria guardar nome, e-mail e empresa de quem pede a demonstração. São dados pessoais: pela LGPD, precisariam de finalidade declarada, aviso de privacidade, prazo de retenção e proteção, além de proteção contra spam (captcha, rate limit). O `mailto:` não grava nada no sistema: a mensagem sai do e-mail do próprio visitante, que vê e edita o texto antes de enviar. É o princípio da minimização: não coletar o que não é necessário.
+
+2. *Por que a landing não tem JavaScript?*
+   Porque ela não precisa: é conteúdo fixo. Sem script, carrega mais rápido, funciona com JavaScript desligado, é lida inteira por buscadores e não aumenta a superfície de ataque. A CSP continua valendo (`script-src 'self'`): mesmo que alguém injetasse HTML, um script inline seria bloqueado.
+
+3. *Qual a diferença entre single-tenant e multi-tenant, e por que o MaintOS é single-tenant hoje?*
+   No **single-tenant**, cada cliente tem a própria instalação (aplicação e banco). O isolamento é físico, simples de explicar e de auditar, mas cada nova fábrica é um novo deploy. No **multi-tenant**, todos os clientes dividem a mesma instalação, e o isolamento é lógico: cada linha tem um `empresa_id`, e o banco filtra por ele (por exemplo, com *Row-Level Security*). Isso escala melhor e é o modelo SaaS, mas exige cuidado: um filtro esquecido vaza dados de uma empresa para outra. Para um MVP acadêmico com uma fábrica fictícia, o single-tenant é o certo; a migração está descrita abaixo.
+
+### Trabalhos futuros: multi-tenant (SaaS)
+
+| O que muda | Como |
+|---|---|
+| Modelo de dados | tabela `empresas` e `empresa_id` em todas as tabelas; unicidade por empresa (tag, código da peça); FKs sem cruzar empresas |
+| Isolamento | *Row-Level Security* com `set_config('app.empresa_id', ...)` na transação, o mesmo padrão do `app.usuario_id` da auditoria; as alternativas são um *schema* ou um banco por empresa |
+| Autenticação | usuário ligado à empresa; o middleware lê a empresa do banco; administrador da plataforma separado do SUPERVISOR |
+| Regras | função de KPIs, procedure, triggers e consultas BD2 respeitando a empresa |
+| Entrada de clientes | cadastro de empresa, convite e recuperação de senha por e-mail (API de e-mail, porque o plano free bloqueia SMTP); a landing troca o `mailto:` por esse fluxo |
+| Operação | plano pago (sem cold start), backup e restauração por empresa, limites por empresa, monitoramento, cobrança; subdomínio por empresa opcional |
+| LGPD | contrato e termo de tratamento com cada cliente, exportação e exclusão dos dados de uma empresa |
+| Testes | teste de isolamento em todas as rotas: a empresa A nunca lê nem altera dados da B |
+
+---
+
 ## Segurança (QSS)
 
 Registro das correções e dos controles de segurança, para o relatório do QSS.

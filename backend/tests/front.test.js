@@ -13,13 +13,41 @@ after(encerrar);
 const PASTA_FRONT = new URL('../../frontend/', import.meta.url);
 
 describe('front estático e CSP', () => {
-  test('/ entrega a tela de login; JS e CSS com os tipos certos', async () => {
+  test('/ entrega a landing page pública: seções, botões e rodapé, sem script e sem formulário', async () => {
     const pagina = await request(app).get('/');
     assert.equal(pagina.status, 200);
     assert.match(pagina.headers['content-type'], /text\/html/);
-    assert.match(pagina.text, /<title>Entrar · MaintOS<\/title>/);
-    assert.match(pagina.text, /Maint<span class="marca-os">OS<\/span>/, '"OS" destacado por classe, sem estilo inline');
-    assert.match(pagina.text, /Gestão de manutenção industrial \(CMMS\)/);
+    const html = pagina.text;
+    assert.match(html, /<title>MaintOS · Gestão de manutenção industrial \(CMMS\)<\/title>/);
+    assert.match(html, /<h1 id="titulo-hero">Manutenção sob controle\.<\/h1>/);
+    for (const secao of ['o-que-faz', 'como-funciona', 'para-sua-empresa']) {
+      assert.match(html, new RegExp(`<section id="${secao}"[^>]*aria-labelledby="titulo-${secao}"`), secao);
+    }
+    assert.match(html, /MTTR/);
+    assert.match(html, /MTBF/);
+    assert.match(html, /sua própria instalação/);
+    // Entrar => login.html; nenhum link para a raiz como se fosse o login
+    assert.ok((html.match(/href="\/login\.html"/g) ?? []).length >= 2, 'botões Entrar');
+    // Solicitar demonstração: mailto com assunto e corpo, sem formulário nem gravação de dados
+    const mailtos = [...html.matchAll(/href="(mailto:[^"]+)"/g)].map((m) => m[1].replaceAll('&amp;', '&'));
+    assert.ok(mailtos.length >= 1, 'botão Solicitar demonstração');
+    for (const link of mailtos) {
+      const url = new URL(link);
+      assert.equal(url.pathname, 'davimguerra@gmail.com');
+      assert.equal(url.searchParams.get('subject'), 'Demonstração do MaintOS');
+      assert.match(url.searchParams.get('body'), /Gostaria de agendar uma demonstração do MaintOS\.\r\n/);
+    }
+    assert.doesNotMatch(html, /<form[\s>]/i, 'sem formulário');
+    assert.doesNotMatch(html, /<script[\s>]/i, 'página estática, sem JavaScript');
+    // acessibilidade: idioma, link para pular ao conteúdo, landmarks e um único h1
+    assert.match(html, /<html lang="pt-BR">/);
+    assert.match(html, /<a class="pular-conteudo" href="#conteudo">/);
+    assert.match(html, /<main id="conteudo">/);
+    assert.match(html, /<nav [^>]*aria-label=/);
+    assert.equal((html.match(/<h1[\s>]/g) ?? []).length, 1);
+    // rodapé
+    assert.match(html, /Projeto acadêmico · dados fictícios/);
+    assert.match(html, /<a href="https:\/\/github\.com\/dev-DaviGuerra\/mini-cmms">/);
 
     const js = await request(app).get('/js/api.js');
     assert.equal(js.status, 200);
@@ -108,24 +136,52 @@ describe('front estático e CSP', () => {
       ...readdirSync(new URL('js/', PASTA_FRONT)).map((f) => new URL(`js/${f}`, PASTA_FRONT)),
     ];
     for (const arquivo of arquivos) {
-      const texto = readFileSync(arquivo, 'utf8');
+      // links de navegação <a href> não carregam nada; o único externo permitido é o GitHub
+      const original = readFileSync(arquivo, 'utf8');
+      for (const [, destino] of original.matchAll(/<a\s[^>]*href="((?:https?:)?\/\/[^"]*)"/gi)) {
+        assert.match(destino, /^https:\/\/github\.com\/dev-DaviGuerra\/mini-cmms$/, `${arquivo.pathname}: link externo ${destino}`);
+      }
+      const texto = original.replaceAll(/<a\s[^>]*>/gi, '<a>');
       assert.doesNotMatch(texto, /(src|href|url)\s*[=(]\s*["']?(https?:)?\/\//i, `${arquivo.pathname}: URL externa`);
       assert.doesNotMatch(texto, /@import/i, `${arquivo.pathname}: @import`);
     }
+  });
+
+  test('login em /login.html: marca MaintOS com "OS" em destaque e link de volta para a landing', async () => {
+    const pagina = await request(app).get('/login.html');
+    assert.equal(pagina.status, 200);
+    assert.match(pagina.text, /<title>Entrar · MaintOS<\/title>/);
+    assert.match(pagina.text, /Maint<span class="marca-os">OS<\/span>/, '"OS" destacado por classe, sem estilo inline');
+    assert.match(pagina.text, /Gestão de manutenção industrial \(CMMS\)/);
+    assert.match(pagina.text, /<form id="form-login"/);
+    assert.match(pagina.text, /<a href="\/">/);
+  });
+
+  test('401, "Sair" e 404 levam para login.html, nunca para a raiz (landing)', async () => {
+    const api = readFileSync(new URL('js/api.js', PASTA_FRONT), 'utf8');
+    assert.match(api, /`login\.html\?motivo=\$\{encodeURIComponent\(motivo\)\}` : 'login\.html'/);
+    for (const arquivo of readdirSync(new URL('js/', PASTA_FRONT))) {
+      const codigo = readFileSync(new URL(`js/${arquivo}`, PASTA_FRONT), 'utf8');
+      assert.doesNotMatch(codigo, /index\.html/, `${arquivo} não pode mandar o usuário para a landing`);
+    }
+    const pagina404 = (await request(app).get('/nao-existe')).text;
+    assert.match(pagina404, /href="\/login\.html"/);
+    assert.doesNotMatch(pagina404, /index\.html/);
   });
 });
 
 test('nome do produto: MaintOS em todos os títulos, sem "Mini-CMMS" no front', () => {
   for (const arquivo of readdirSync(PASTA_FRONT).filter((f) => f.endsWith('.html'))) {
     const html = readFileSync(new URL(arquivo, PASTA_FRONT), 'utf8');
-    assert.match(html, /<title>[^<]*MaintOS<\/title>/, arquivo);
+    assert.match(html, /<title>[^<]*MaintOS[^<]*<\/title>/, arquivo);
   }
   const textos = [
     ...readdirSync(PASTA_FRONT).filter((f) => f.endsWith('.html')).map((f) => new URL(f, PASTA_FRONT)),
     ...readdirSync(new URL('js/', PASTA_FRONT)).map((f) => new URL(`js/${f}`, PASTA_FRONT)),
     new URL('img/logo.svg', PASTA_FRONT),
   ];
-  for (const arquivo of textos) assert.doesNotMatch(readFileSync(arquivo, 'utf8'), /Mini-CMMS/i, arquivo.pathname);
+  // sensível a maiúsculas: o nome técnico "mini-cmms" (URL do repositório) continua permitido
+  for (const arquivo of textos) assert.doesNotMatch(readFileSync(arquivo, 'utf8'), /Mini-CMMS/, arquivo.pathname);
 });
 
 describe('produção (Render: sem NGINX, atrás do balanceador com HTTPS)', () => {

@@ -9,7 +9,8 @@
 Sistema de Ordens de Manutenção e Estoque de Peças — projeto da AVD2 (Módulo IV).
 O nome junta *Maint* (de *maintenance*, manutenção) e *OS* (Ordem de Serviço).
 
-Em produção: **https://maintos.com.br** (Render; ver [Deploy](#deploy-render)). O repositório
+Em produção: **https://maintos.com.br** (Render; ver [Deploy](#deploy-render)). A raiz é a
+landing page pública, e o login fica em `/login.html`. O repositório
 e o projeto no SonarCloud mantêm o nome técnico `mini-cmms`.
 
 Permite cadastrar equipamentos, abrir ordens de serviço (OS), fechá-las consumindo peças do
@@ -158,7 +159,8 @@ API e o front, na mesma origem.
 
 | Página | Conteúdo |
 |---|---|
-| `index.html` | login em tela dividida (o JWT fica no `sessionStorage`) |
+| `index.html` | **landing page pública** (raiz do site): o que o sistema faz, como funciona e "Para sua empresa"; botões "Entrar" e "Solicitar demonstração" (`mailto:` com assunto e corpo prontos). Estática: sem JavaScript, sem formulário e sem gravar dados |
+| `login.html` | login em tela dividida (o JWT fica no `sessionStorage`). O 401, o "Sair" e a 404 levam para cá |
 | `os.html` | indicadores do `/api/kpis/resumo`, lista de OS com filtros e paginação (filtros também pela URL: `?status=&prioridade=&equipamentoId=`); "+ Nova OS" em painel lateral para OPERADOR e SUPERVISOR |
 | `os-detalhe.html?id=N` | detalhe da OS: dados, peças com custo e histórico de auditoria; "Assumir" (TECNICO, OS aberta) e "Fechar" em painel lateral com lista de peças (TECNICO que assumiu ou SUPERVISOR). Falta de estoque: mensagem com peça, pedido e disponível, e a OS vai para "Aguardando peça" |
 | `equipamentos.html` | resumo (total, operando, parados), lista com tag, nome, linha, criticidade, status em semáforo e OS pendentes (o link abre a lista de OS filtrada); busca e filtro; cadastro em painel lateral para SUPERVISOR |
@@ -275,6 +277,37 @@ todos os dados ficam no Neon.
   `frontend`) e GitHub Actions.
 - Relatório completo do QSS (correções do Sonar, controles de segurança, cobertura e prints):
   [`docs/qss-relatorio.md`](docs/qss-relatorio.md).
+
+## Trabalhos futuros: multi-tenant (SaaS)
+
+Hoje o MaintOS é **single-tenant**: cada fábrica recebe a própria instalação, com servidor,
+banco e endereço exclusivos, e o isolamento entre empresas vem da infraestrutura. Para virar
+um SaaS, com várias empresas na mesma instalação, seria preciso:
+
+1. **Modelo de dados:** tabela `empresas` e coluna `empresa_id` em todas as tabelas
+   (usuários, equipamentos, peças, OS, movimentações, alertas, auditoria). A unicidade passa a
+   valer por empresa (tag do equipamento, código da peça), e as chaves estrangeiras não podem
+   cruzar empresas.
+2. **Isolamento no banco:** *Row-Level Security* do PostgreSQL, com políticas por
+   `empresa_id` e o valor definido por transação com `set_config('app.empresa_id', ...)`, o
+   mesmo mecanismo que a auditoria já usa para `app.usuario_id`. Assim, um `WHERE` esquecido
+   não vaza dados. As alternativas são um *schema* ou um banco por empresa, que isolam mais
+   mas são mais caras de migrar e operar.
+3. **Autenticação e perfis:** o usuário pertence a uma empresa. O middleware `autenticar` lê
+   a empresa do banco, como já faz com o perfil, e haveria um papel de administrador da
+   plataforma separado do SUPERVISOR de cada fábrica.
+4. **Regras e consultas:** `sp_kpis_equipamento`, `sp_entrada_estoque`, as triggers e as
+   consultas BD2 passam a respeitar a empresa (pela RLS ou por parâmetro).
+5. **Entrada de clientes:** cadastro da empresa, convite de usuários por e-mail e recuperação
+   de senha. Isso exige envio de e-mail por API, porque o plano free do Render bloqueia as
+   portas SMTP. A landing trocaria o `mailto:` por esse fluxo.
+6. **Operação:** plano pago (sem cold start), backups com restauração por empresa, limites e
+   rate limit por empresa, monitoramento, planos e cobrança. Opcionalmente, um subdomínio por
+   empresa (`empresa.maintos.com.br`, com certificado *wildcard*).
+7. **LGPD:** contrato e termo de tratamento de dados com cada cliente, exportação e exclusão
+   dos dados de uma empresa, e registro de acesso.
+8. **Testes de isolamento:** em todas as rotas, um usuário da empresa A não lê nem altera
+   dados da empresa B.
 
 ## Fluxo de trabalho
 - Uma issue por funcionalidade, board no GitHub Projects (To Do / In Progress / Done).

@@ -3,56 +3,109 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Entrar · MaintOS</title>
+  <title>MaintOS · Gestão de manutenção industrial (CMMS)</title>
+  <meta name="description" content="MaintOS: ordens de serviço, estoque de peças e indicadores de manutenção (MTTR, MTBF) da fábrica num só painel.">
   <link rel="icon" href="img/logo.svg" type="image/svg+xml">
   <link rel="preload" href="fontes/ibm-plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="fontes/ibm-plex-sans-600.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="css/estilo.css">
-  <script type="module" src="js/login.js"></script>
+  <!-- Página pública e estática: sem JavaScript, sem formulário e sem gravar dados. -->
 </head>
-<body class="pagina-login">
-  <section class="login-marca" aria-label="Sobre o sistema">
-    <div class="login-logo">
-      <img src="img/logo.svg" alt="" width="40" height="40">
-      <div class="login-logo-texto">
-        <span class="login-logo-nome">Maint<span class="marca-os">OS</span></span>
-        <span class="login-logo-subtitulo">Gestão de manutenção industrial (CMMS)</span>
+<body class="pagina-landing">
+  <a class="pular-conteudo" href="#conteudo">Pular para o conteúdo</a>
+
+  <header class="landing-topo">
+    <a class="landing-marca" href="/" aria-label="MaintOS, página inicial">
+      <img src="img/logo.svg" alt="" width="32" height="32">
+      <span>Maint<span class="marca-os">OS</span></span>
+    </a>
+    <nav class="landing-nav" aria-label="Seções da página">
+      <a href="#o-que-faz">O que faz</a>
+      <a href="#como-funciona">Como funciona</a>
+      <a href="#para-sua-empresa">Para sua empresa</a>
+    </nav>
+    <a class="botao no-escuro landing-entrar" href="/login.html">Entrar</a>
+  </header>
+
+  <main id="conteudo">
+    <section class="landing-hero" aria-labelledby="titulo-hero">
+      <div class="landing-hero-texto">
+        <p class="landing-sobretitulo">Gestão de manutenção industrial (CMMS)</p>
+        <h1 id="titulo-hero">Manutenção sob controle.</h1>
+        <p class="landing-subtitulo">Ordens de serviço, estoque de peças e indicadores de manutenção da fábrica num só painel. Da falha relatada ao MTTR do mês, sem planilha.</p>
+        <div class="landing-acoes">
+          <a class="botao primario" href="mailto:davimguerra@gmail.com?subject=Demonstra%C3%A7%C3%A3o%20do%20MaintOS&amp;body=Ol%C3%A1%2C%0D%0A%0D%0AGostaria%20de%20agendar%20uma%20demonstra%C3%A7%C3%A3o%20do%20MaintOS.%0D%0A%0D%0AEmpresa%3A%0D%0ACidade%2FUF%3A%0D%0AN%C3%BAmero%20aproximado%20de%20equipamentos%3A%0D%0AMelhor%20dia%20e%20hor%C3%A1rio%20para%20contato%3A%0D%0A%0D%0AObrigado.">Solicitar demonstração<span class="so-leitor-de-tela"> (abre o seu programa de e-mail)</span></a>
+          <a class="botao no-escuro" href="/login.html">Entrar</a>
+        </div>
+        <ul class="login-modulos" aria-label="Módulos">
+          <li>OS</li>
+          <li>Estoque</li>
+          <li>MTTR</li>
+          <li>MTBF</li>
+        </ul>
       </div>
-    </div>
+    </section>
 
-    <div class="login-chamada">
-      <h1>Manutenção sob controle.</h1>
-      <p>Ordens de serviço, estoque de peças e indicadores de manutenção da fábrica num só painel.</p>
-      <ul class="login-modulos" aria-label="Módulos">
-        <li>OS</li>
-        <li>MTTR</li>
-        <li>MTBF</li>
-        <li>Estoque</li>
-      </ul>
-    </div>
+    <section id="o-que-faz" class="landing-secao" aria-labelledby="titulo-o-que-faz">
+      <h2 id="titulo-o-que-faz">O que o sistema faz</h2>
+      <div class="landing-cartoes">
+        <article class="landing-cartao">
+          <span class="landing-cartao-tag mono" aria-hidden="true">OS</span>
+          <h3>Ordens de serviço</h3>
+          <p>O operador abre a OS com o equipamento, a prioridade e a falha. O técnico assume, executa e fecha registrando causa, solução, horas e peças. Cada mudança de status fica no histórico, com quem fez e quando.</p>
+        </article>
+        <article class="landing-cartao">
+          <span class="landing-cartao-tag mono" aria-hidden="true">EST</span>
+          <h3>Estoque de peças</h3>
+          <p>As peças usadas saem do estoque no fechamento da OS, tudo numa única transação: se faltar uma peça, nada é gravado. Abaixo do mínimo, o sistema gera um alerta, que se resolve sozinho quando chega a reposição.</p>
+        </article>
+        <article class="landing-cartao">
+          <span class="landing-cartao-tag mono" aria-hidden="true">KPI</span>
+          <h3>Indicadores</h3>
+          <p><abbr title="Mean Time To Repair">MTTR</abbr>, o tempo médio para reparar, e <abbr title="Mean Time Between Failures">MTBF</abbr>, o tempo médio entre falhas, por equipamento. Além disso: disponibilidade, custo de manutenção, Pareto das causas de falha e as peças mais consumidas, em 30, 90 ou 180 dias.</p>
+        </article>
+      </div>
+    </section>
 
-    <p class="login-nota">Projeto acadêmico · todos os dados são fictícios</p>
-  </section>
+    <section id="como-funciona" class="landing-secao landing-secao-alternada" aria-labelledby="titulo-como-funciona">
+      <h2 id="titulo-como-funciona">Como funciona</h2>
+      <ol class="landing-passos">
+        <li>
+          <span class="landing-passo-numero mono" aria-hidden="true">01</span>
+          <h3>Abrir a OS</h3>
+          <p>Quem viu a falha abre a ordem de serviço, com o equipamento e a prioridade, de baixa a emergência.</p>
+        </li>
+        <li>
+          <span class="landing-passo-numero mono" aria-hidden="true">02</span>
+          <h3>O técnico executa</h3>
+          <p>O técnico assume a OS, faz o reparo e a fecha com as peças usadas. Se faltar peça, ela fica aguardando peça.</p>
+        </li>
+        <li>
+          <span class="landing-passo-numero mono" aria-hidden="true">03</span>
+          <h3>Os indicadores mostram</h3>
+          <p>O painel atualiza MTTR, MTBF, disponibilidade e custo e aponta as causas que mais param a fábrica.</p>
+        </li>
+      </ol>
+    </section>
 
-  <main class="login-formulario">
-    <div class="login-cartao">
-      <h2>Entrar</h2>
-      <p>Use o e-mail e a senha do seu perfil.</p>
-
-      <div id="mensagem" role="alert" hidden></div>
-
-      <form id="form-login" novalidate>
-        <div class="campo">
-          <label for="email">E-mail</label>
-          <input id="email" name="email" type="email" autocomplete="username" required>
+    <section id="para-sua-empresa" class="landing-secao" aria-labelledby="titulo-para-sua-empresa">
+      <div class="landing-empresa">
+        <div>
+          <h2 id="titulo-para-sua-empresa">Para sua empresa</h2>
+          <p>Hoje, cada fábrica recebe a <strong>sua própria instalação</strong> do MaintOS: servidor, banco de dados e endereço exclusivos. Os dados de uma empresa nunca dividem banco com os de outra, e os usuários e perfis (operador, técnico, supervisor) são cadastrados pelo supervisor da própria fábrica.</p>
+          <p>Quer ver o sistema funcionando com os seus equipamentos? Peça uma demonstração.</p>
         </div>
-        <div class="campo">
-          <label for="senha">Senha</label>
-          <input id="senha" name="senha" type="password" autocomplete="current-password" required>
+        <div class="landing-acoes">
+          <a class="botao primario" href="mailto:davimguerra@gmail.com?subject=Demonstra%C3%A7%C3%A3o%20do%20MaintOS&amp;body=Ol%C3%A1%2C%0D%0A%0D%0AGostaria%20de%20agendar%20uma%20demonstra%C3%A7%C3%A3o%20do%20MaintOS.%0D%0A%0D%0AEmpresa%3A%0D%0ACidade%2FUF%3A%0D%0AN%C3%BAmero%20aproximado%20de%20equipamentos%3A%0D%0AMelhor%20dia%20e%20hor%C3%A1rio%20para%20contato%3A%0D%0A%0D%0AObrigado.">Solicitar demonstração<span class="so-leitor-de-tela"> (abre o seu programa de e-mail)</span></a>
+          <a class="botao secundario" href="/login.html">Entrar</a>
         </div>
-        <button id="botao-entrar" type="submit" class="botao primario largo">Entrar</button>
-      </form>
-    </div>
+      </div>
+    </section>
   </main>
+
+  <footer class="landing-rodape">
+    <p>Projeto acadêmico · dados fictícios</p>
+    <a href="https://github.com/dev-DaviGuerra/mini-cmms">Código no GitHub</a>
+  </footer>
 </body>
 </html>
