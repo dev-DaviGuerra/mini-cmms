@@ -1,4 +1,4 @@
-# CI do Mini-CMMS: a cada push e pull request, roda os testes do backend num PostgreSQL
+# CI do MaintOS: a cada push e pull request, roda os testes do backend num PostgreSQL
 # descartável (service container do próprio Actions, NUNCA o Neon), mede a cobertura com
 # c8 e envia o resultado ao SonarCloud.
 name: CI

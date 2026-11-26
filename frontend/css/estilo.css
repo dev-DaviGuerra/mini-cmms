@@ -1,5 +1,5 @@
 /* =====================================================================
-   Mini-CMMS — conceito "sala de controle industrial"
+   MaintOS — conceito "sala de controle industrial"
    Base neutra fria + UMA cor de destaque (amarelo de segurança).
    Sem estilos inline: a CSP só permite este arquivo e as fontes locais.
    ===================================================================== */
@@ -932,6 +932,11 @@ a.indicador.parados.ativo:hover { background: color-mix(in srgb, var(--critico-s
 .login-marca > * { position: relative; }
 .login-logo { display: flex; align-items: center; gap: var(--esp-3); color: var(--branco); font-weight: 700; font-size: var(--texto-lg); }
 .login-logo img { width: 40px; height: 40px; }
+.login-logo-texto { display: flex; flex-direction: column; gap: 2px; }
+.login-logo-nome { line-height: 1.1; }
+/* "OS" de Ordem de Serviço em destaque no nome do produto (Maint + OS) */
+.marca-os { color: var(--destaque); }
+.login-logo-subtitulo { font-size: var(--texto-sm); font-weight: 400; color: var(--grafite-300); }
 .login-chamada h1 { font-size: 2.5rem; line-height: 1.1; color: var(--branco); max-width: 14ch; }
 .login-chamada p { margin: var(--esp-4) 0 0; max-width: 42ch; font-size: var(--texto-lg); color: var(--grafite-300); }
 .login-modulos { display: flex; flex-wrap: wrap; gap: var(--esp-2); margin: var(--esp-5) 0 0; padding: 0; list-style: none; }

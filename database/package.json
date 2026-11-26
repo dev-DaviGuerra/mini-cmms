@@ -2,7 +2,7 @@
   "name": "mini-cmms-database",
   "version": "1.0.0",
   "private": true,
-  "description": "Seed de dados fictícios do Mini-CMMS",
+  "description": "Seed de dados fictícios do MaintOS",
   "type": "module",
   "engines": {
     "node": ">=20"

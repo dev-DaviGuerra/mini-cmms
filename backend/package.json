@@ -2,7 +2,7 @@
   "name": "mini-cmms-backend",
   "version": "1.0.0",
   "private": true,
-  "description": "API do Mini-CMMS (Express + PostgreSQL)",
+  "description": "API do MaintOS (Express + PostgreSQL)",
   "type": "module",
   "main": "src/server.js",
   "engines": {

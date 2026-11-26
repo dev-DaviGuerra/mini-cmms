@@ -1,4 +1,4 @@
-# Caderno de estudo — Mini-CMMS
+# Caderno de estudo — MaintOS
 
 Um resumo por etapa, com perguntas que um professor poderia fazer na apresentação.
 
@@ -320,7 +320,7 @@ Por isso os KPIs ficaram em FUNCTION (precisam devolver uma tabela consultável 
    São 12 testes de backend novos (78 no total) e 28 verificações no navegador real.
 
 **Por que não existe cadastro aberto (autocadastro)?**
-O Mini-CMMS é um sistema **interno** de uma fábrica, não um serviço público. Quem pode abrir OS, mexer no estoque ou ver custos é decidido pela empresa, não pela própria pessoa. Com um cadastro aberto, qualquer um que achasse o endereço na internet (o site fica numa VM pública na Azure) poderia criar uma conta e entrar. E, se pudesse escolher o perfil, viraria supervisor. Por isso o cadastro é exclusivo do SUPERVISOR, que define o perfil de cada pessoa (*privilégio mínimo*), e a API recusa com 403 qualquer outro perfil. A senha inicial é combinada pessoalmente, e o próprio usuário pode trocá-la depois em "Trocar senha". Isso também reduz a superfície de ataque: não existe rota pública de criação de conta para ser abusada, por exemplo com criação em massa de contas.
+O MaintOS é um sistema **interno** de uma fábrica, não um serviço público. Quem pode abrir OS, mexer no estoque ou ver custos é decidido pela empresa, não pela própria pessoa. Com um cadastro aberto, qualquer um que achasse o endereço na internet (o site fica numa VM pública na Azure) poderia criar uma conta e entrar. E, se pudesse escolher o perfil, viraria supervisor. Por isso o cadastro é exclusivo do SUPERVISOR, que define o perfil de cada pessoa (*privilégio mínimo*), e a API recusa com 403 qualquer outro perfil. A senha inicial é combinada pessoalmente, e o próprio usuário pode trocá-la depois em "Trocar senha". Isso também reduz a superfície de ataque: não existe rota pública de criação de conta para ser abusada, por exemplo com criação em massa de contas.
 
 **Perguntas prováveis**
 
@@ -441,6 +441,41 @@ O Mini-CMMS é um sistema **interno** de uma fábrica, não um serviço público
 
 3. *Tirar os `.sql` do SonarCloud não é esconder problema?*
    Não, porque o SonarCloud não analisa PostgreSQL: ele trata os arquivos como PL/SQL do Oracle, não consegue ler a sintaxe (16 erros de parse), pede uma conexão com um banco Oracle (o aviso) e aplica regras do Oracle (a única que apontou algo era falso positivo). O SQL continua verificado por ferramentas que entendem PostgreSQL: a CI aplica os scripts num PostgreSQL 18 real e roda as consultas no psql, e os testes da API conferem triggers, função e procedure com números calculados à mão.
+
+---
+
+## Etapa 11 — Deploy no Render com domínio próprio (issue #11)
+
+**O que foi feito**
+
+1. O produto passou a se chamar **MaintOS** (*Maint* de *maintenance* + *OS* de Ordem de Serviço), com o subtítulo "Gestão de manutenção industrial (CMMS)". O repositório e o SonarCloud continuam `mini-cmms`.
+2. O deploy saiu da VM da Azure e foi para o **Render** (PaaS), descrito no `render.yaml` (Blueprint). É um único *web service* Node: o mesmo Express serve a API e o `frontend/`, já que não há NGINX. Health check em `/api/health`, plano free, região `virginia`, e o deploy só sai depois que a CI passa.
+3. Arquitetura: o domínio `maintos.com.br` é registrado no **Registro.br**. O DNS de lá aponta para o **Render** (registro `A` na raiz e `CNAME` no `www`). O Render é o servidor web e o proxy: faz o HTTPS com certificado automático e repassa as requisições à **aplicação Node**, que usa o banco no **Neon**.
+4. Atrás do proxy: `trust proxy = 1`, para o rate limit contar pelo IP real (com teste de que um IP forjado não muda o contador). A CSP inclui `upgrade-insecure-requests`, e o helmet envia HSTS. O `JWT_SECRET` de produção é novo e fica fora do git; `LOGIN_RATE_LIMIT_MAX` é 10.
+5. Plano free: a instância dorme após 15 minutos sem tráfego, e a primeira requisição depois disso leva cerca de 1 minuto (cold start). O Neon também suspende o banco ocioso.
+
+**Perguntas prováveis (IGSN1)**
+
+1. *Qual a diferença entre o registro `A` e o `CNAME`, e por que a raiz usa `A`?*
+   O `A` liga um nome direto a um endereço IPv4 (aqui, o IP do balanceador do Render). O `CNAME` diz que um nome é apelido de outro nome (`www.maintos.com.br` → `maintos.onrender.com`), e o IP é resolvido a partir dele. A raiz do domínio (`maintos.com.br`) não pode ter `CNAME`, porque ela já tem registros obrigatórios (`SOA` e `NS`), e um `CNAME` não pode conviver com outros registros no mesmo nome. Por isso a raiz usa `A`. Alguns provedores oferecem `ALIAS`/`ANAME` para contornar isso; o DNS do Registro.br não oferece.
+
+2. *Quem faz o HTTPS e como o certificado é emitido?*
+   O balanceador do Render. Depois que o DNS aponta para ele, o Render prova à autoridade certificadora (Let's Encrypt ou Google Trust Services) que controla o domínio pelo protocolo ACME, recebe o certificado e o renova sozinho. A conexão HTTPS termina no balanceador, que repassa a requisição ao Node por HTTP dentro da rede do Render. Requisições HTTP são redirecionadas para HTTPS, e o HSTS (enviado pelo helmet) faz o navegador usar HTTPS direto nas próximas visitas.
+
+3. *Por que `trust proxy = 1` e não `true`?*
+   O Node não vê o IP do cliente, e sim o do balanceador. O balanceador acrescenta o IP real ao cabeçalho `X-Forwarded-For`. Com `1`, o Express confia só no último salto e usa o último endereço do cabeçalho, que é o que o balanceador escreveu. Com `true`, usaria o primeiro, que o próprio cliente pode inventar: bastaria mandar um IP diferente a cada tentativa para escapar do limite de 10 logins. Há um teste que forja o cabeçalho e confere que o contador não zera.
+
+4. *O que é o cold start e como lidar com ele na apresentação?*
+   No plano gratuito, o Render desliga a instância depois de 15 minutos sem tráfego para economizar recursos. Na próxima requisição ele a liga de novo, e isso leva cerca de 1 minuto. O Neon também suspende o banco ocioso, e a primeira consulta o acorda. É a troca do plano gratuito: custo zero em troca de latência na primeira visita. Na apresentação, abrir o site alguns minutos antes resolve. Num plano pago, a instância fica sempre ligada.
+
+5. *Qual a diferença entre a VM da Azure (IaaS) e o Render (PaaS)?*
+   Na VM, eu administro tudo acima do hardware: sistema operacional, atualizações, NGINX, certificado (Certbot), PM2, firewall. No Render, a plataforma cuida disso: recebe o código do GitHub, roda o build, inicia o processo, faz o HTTPS e reinicia a instância se o health check falhar. Em troca, eu tenho menos controle (região fixa, sem SSH no plano free, disco efêmero). Para uma aplicação sem estado em disco, como esta, o PaaS reduz a superfície de erro de configuração.
+
+6. *Onde ficam os segredos em produção?*
+   No painel do Render, como variáveis de ambiente (`DATABASE_URL` e `JWT_SECRET`), nunca no repositório. O `render.yaml` só declara que elas existem (`sync: false`), sem valor. O `JWT_SECRET` de produção é diferente do de desenvolvimento: um token emitido em desenvolvimento não vale em produção, e vazar o `.env` local não compromete o site publicado.
+
+7. *Para que serve o health check?*
+   O Render faz um GET em `/api/health`. Se a resposta não for 2xx ou 3xx em até 5 segundos, ele para de mandar tráfego para a instância e depois a reinicia. Num deploy novo, a versão só entra no ar quando passa no health check; se não passar, a anterior continua no ar. A rota fica antes do rate limit, para as verificações não gastarem a cota, e não consulta o banco: diz se o processo está de pé, e uma pausa do Neon não deve reiniciar a aplicação.
 
 ---
 

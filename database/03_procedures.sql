@@ -1,5 +1,5 @@
 -- =====================================================================
--- Mini-CMMS — 03_procedures.sql
+-- MaintOS — 03_procedures.sql
 -- sp_kpis_equipamento(data_ini, data_fim [, custo_hora])
 --
 -- Retorna uma linha por equipamento com:

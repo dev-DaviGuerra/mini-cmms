@@ -2,7 +2,7 @@
   "name": "mini-cmms-frontend",
   "version": "1.0.0",
   "private": true,
-  "description": "Front do Mini-CMMS. Sem build: o npm só fornece os arquivos de terceiros (fontes), copiados para pastas servidas pelo site.",
+  "description": "Front do MaintOS. Sem build: o npm só fornece os arquivos de terceiros (fontes), copiados para pastas servidas pelo site.",
   "type": "module",
   "scripts": {
     "vendor": "node scripts/copiar-vendor.js"

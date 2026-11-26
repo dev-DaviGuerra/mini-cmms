@@ -1,5 +1,5 @@
 -- =====================================================================
--- Mini-CMMS — 04_consultas_bd2.sql
+-- MaintOS — 04_consultas_bd2.sql
 -- Três consultas complexas para a disciplina de BD2.
 --
 -- Parâmetros das três consultas (os mesmos de sp_kpis_equipamento):
