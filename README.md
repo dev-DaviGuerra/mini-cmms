@@ -159,7 +159,7 @@ API e o front, na mesma origem.
 
 | Página | Conteúdo |
 |---|---|
-| `index.html` | **landing page pública** (raiz do site): o que o sistema faz, como funciona e "Para sua empresa"; botões "Entrar" e "Solicitar demonstração" (`mailto:` com assunto e corpo prontos). Estática: sem JavaScript, sem formulário e sem gravar dados |
+| `index.html` | **landing page pública** (raiz do site): o que o sistema faz, como funciona e "Para sua empresa"; botões "Entrar" e "Solicitar demonstração" (`mailto:` com assunto e corpo prontos), com "ou escreva para" e o e-mail visível com botão "Copiar e-mail" (`js/landing.js`), para quem não tem programa de e-mail. No hero, uma captura real do Dashboard (`img/dashboard.webp`, com fallback `dashboard.png`). Sem formulário e sem gravar dados |
 | `login.html` | login em tela dividida (o JWT fica no `sessionStorage`). O 401, o "Sair" e a 404 levam para cá |
 | `os.html` | indicadores do `/api/kpis/resumo`, lista de OS com filtros e paginação (filtros também pela URL: `?status=&prioridade=&equipamentoId=`); "+ Nova OS" em painel lateral para OPERADOR e SUPERVISOR |
 | `os-detalhe.html?id=N` | detalhe da OS: dados, peças com custo e histórico de auditoria; "Assumir" (TECNICO, OS aberta) e "Fechar" em painel lateral com lista de peças (TECNICO que assumiu ou SUPERVISOR). Falta de estoque: mensagem com peça, pedido e disponível, e a OS vai para "Aguardando peça" |

@@ -30,8 +30,11 @@ Serviço). Subtítulo: "Gestão de manutenção industrial (CMMS)". Em toda tela
 
 **Front** — HTML + JS vanilla + Chart.js
 - Telas: login, lista de OS, detalhe/fechamento da OS, usuários (SUPERVISOR), dashboard.
-- Landing page pública (#37): a raiz `/` (`index.html`) é estática, sem JS, sem formulário e
-  sem gravar dados ("Solicitar demonstração" é um `mailto:`). O login fica em `login.html`,
+- Landing page pública (#37, #39): a raiz `/` (`index.html`) não tem formulário nem grava dados
+  ("Solicitar demonstração" é um `mailto:`). O único JS é `js/landing.js` ("Copiar e-mail",
+  melhoria progressiva: o botão nasce `hidden`; se a Clipboard API falhar, seleciona o texto).
+  A captura do hero (`img/dashboard.webp` + fallback `.png`, 1600×1000) vem do sistema rodando
+  com o seed; se o visual do dashboard mudar, gerar de novo e atualizar o `alt`. O login fica em `login.html`,
   e todo redirecionamento para o login (401, "Sair", 404) aponta para `login.html`, nunca
   para a raiz. O único link externo permitido é o do GitHub (há teste).
 - Multi-tenant (SaaS) é **trabalho futuro**, registrado no README e no estudo. Hoje é uma

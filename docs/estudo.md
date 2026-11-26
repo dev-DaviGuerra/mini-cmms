@@ -515,6 +515,29 @@ O MaintOS é um sistema **interno** de uma fábrica, não um serviço público. 
 
 ---
 
+## Ajustes na landing (issue #39)
+
+**O que foi feito**
+
+1. O `mailto:` não faz nada em computadores sem programa de e-mail configurado. Por isso o e-mail agora aparece **escrito** na seção "Para sua empresa", com um botão **"Copiar e-mail"**, e abaixo do botão principal do hero há "ou escreva para davimguerra@gmail.com".
+2. O botão usa a **Clipboard API** (`navigator.clipboard.writeText`) num arquivo próprio, `js/landing.js`, sem script inline (a CSP continua `script-src 'self'`). Se a API não existir ou for negada, o script **seleciona o texto** do e-mail e pede o Ctrl+C.
+3. O aviso "E-mail copiado." fica num `<p role="status" aria-live="polite">`, então o leitor de tela o anuncia sem tirar o foco do botão.
+4. O lado direito do hero ganhou uma **captura real do Dashboard**, gerada com o sistema rodando sobre os dados do seed: 1600×1000 px, WebP de 64 KB com fallback PNG de 93 KB (`<picture>`), servida localmente, numa moldura de janela e com texto alternativo que descreve os números e os gráficos.
+5. Em telas de até 960 px o hero vira uma coluna e a imagem vai para baixo do texto. Conferido no navegador em 1366, 768 e 390 px, sem rolagem horizontal.
+
+**Perguntas prováveis**
+
+1. *O que acontece com o botão "Copiar e-mail" se o JavaScript estiver desligado?*
+   Ele não aparece: o HTML o traz com o atributo `hidden`, e só o script o mostra. Isso é **melhoria progressiva**: sem JavaScript, a página continua completa (o e-mail está escrito e pode ser selecionado), e nenhum botão fica na tela sem funcionar.
+
+2. *Por que WebP com fallback PNG, e por que declarar `width` e `height` na imagem?*
+   O WebP é bem menor que o PNG para a mesma imagem (64 KB contra 93 KB aqui), o que importa no celular. O `<picture>` deixa o navegador escolher: quem entende WebP baixa o WebP, e os outros baixam o PNG do `<img>`. Já `width` e `height` dão a proporção antes do download, então o navegador reserva o espaço e o texto não "pula" quando a imagem chega (o CLS das Core Web Vitals).
+
+3. *Como um usuário de leitor de tela fica sabendo que o e-mail foi copiado?*
+   Pela região `aria-live="polite"` (com `role="status"`): quando o script muda o texto dela, o leitor anuncia a mensagem assim que terminar o que está lendo, sem mover o foco. O script esvazia a região e a preenche de novo depois de 100 ms, para que um segundo clique seja anunciado também. A imagem tem texto alternativo descritivo, e a barra da janela, que é só decoração, fica com `aria-hidden`.
+
+---
+
 ## Segurança (QSS)
 
 Registro das correções e dos controles de segurança, para o relatório do QSS.
