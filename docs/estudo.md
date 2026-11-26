@@ -500,7 +500,7 @@ O MaintOS é um sistema **interno** de uma fábrica, não um serviço público. 
 3. *Qual a diferença entre single-tenant e multi-tenant, e por que o MaintOS é single-tenant hoje?*
    No **single-tenant**, cada cliente tem a própria instalação (aplicação e banco). O isolamento é físico, simples de explicar e de auditar, mas cada nova fábrica é um novo deploy. No **multi-tenant**, todos os clientes dividem a mesma instalação, e o isolamento é lógico: cada linha tem um `empresa_id`, e o banco filtra por ele (por exemplo, com *Row-Level Security*). Isso escala melhor e é o modelo SaaS, mas exige cuidado: um filtro esquecido vaza dados de uma empresa para outra. Para um MVP acadêmico com uma fábrica fictícia, o single-tenant é o certo; a migração está descrita abaixo.
 
-### Trabalhos futuros: multi-tenant (SaaS)
+### Trabalhos futuros: multi-tenant (SaaS) — feito na #41 (ver "SaaS multiempresa" abaixo)
 
 | O que muda | Como |
 |---|---|
@@ -535,6 +535,46 @@ O MaintOS é um sistema **interno** de uma fábrica, não um serviço público. 
 
 3. *Como um usuário de leitor de tela fica sabendo que o e-mail foi copiado?*
    Pela região `aria-live="polite"` (com `role="status"`): quando o script muda o texto dela, o leitor anuncia a mensagem assim que terminar o que está lendo, sem mover o foco. O script esvazia a região e a preenche de novo depois de 100 ms, para que um segundo clique seja anunciado também. A imagem tem texto alternativo descritivo, e a barra da janela, que é só decoração, fica com `aria-hidden`.
+
+---
+
+## SaaS multiempresa (issue #41)
+
+**O que foi feito**
+
+1. O MaintOS deixou de ser uma instalação por fábrica e virou **multiempresa**: tabela `empresas`, `empresa_id NOT NULL` nas 8 tabelas de negócio, com chaves estrangeiras compostas e índices. O script `06_multiempresa.sql` pode rodar mais de uma vez e põe os dados que já existiam na "Empresa Demonstração".
+2. O isolamento é feito pelo próprio PostgreSQL, com **Row-Level Security** (`ENABLE` + `FORCE`). As políticas comparam `empresa_id` com `current_setting('app.empresa_id')`, que a API grava com `set_config` no começo de cada requisição. A API conecta com o papel **`maintos_app`**, que não é dono das tabelas e não tem `BYPASSRLS`.
+3. Novo perfil **PLATAFORMA**, fora das empresas, com painel próprio. Ele aprova ou recusa os pedidos feitos em "Solicitar acesso". Aprovar cria a empresa e o primeiro supervisor, com uma senha temporária mostrada uma única vez e troca obrigatória no primeiro login.
+4. Cadastro público com dados mínimos e consentimento LGPD, rate limit, campo armadilha (honeypot) contra robôs e validação no servidor.
+5. Desempenho: o contexto é gravado **na mesma viagem** ao banco que a autenticação já fazia. Toda rota autenticada passou a fazer 2 viagens ao banco (antes eram de 1 a 4).
+
+**Por que RLS é mais seguro do que só filtrar no código**
+
+Filtrar no código significa lembrar de escrever `WHERE empresa_id = $1` em **toda** consulta, para sempre, em cada rota nova, em cada `JOIN`, em cada subconsulta, em cada função e em cada trigger. Basta um esquecimento (uma consulta nova de relatório, um `UPDATE ... WHERE id = $1`) para a empresa A ler ou alterar dados da B, e nada avisa: a consulta funciona e devolve dados a mais. Com RLS, a regra fica **num lugar só, dentro do banco**, e vale para tudo o que o papel da API executa: consultas da API, a função `sp_kpis_equipamento`, a procedure, as triggers e as consultas BD2 no psql. O padrão inverte: se alguém esquecer o contexto, o banco não devolve **nada** (falha fechada), em vez de devolver tudo (falha aberta). Por isso existem os detalhes que fazem a RLS valer de verdade: `FORCE` (vale até para o dono), um papel sem `BYPASSRLS` para a API (o dono no Neon tem `BYPASSRLS` e ignoraria tudo; a API se recusa a subir com ele), `WITH CHECK` (impede gravar ou mover uma linha para outra empresa) e FKs compostas (impedem ligar registros de empresas diferentes). O limite: a RLS protege contra **erros da aplicação**, não contra quem já executa SQL arbitrário como `maintos_app`, porque `set_config` é uma função comum. Por isso continuam valendo as consultas parametrizadas (sem SQL injection) e os segredos fora do código. Os testes provam as duas camadas: pela API (404 entre empresas) e direto no SQL (o banco não devolve nem grava linha de outra empresa).
+
+**Perguntas prováveis**
+
+1. *Por que a OS da outra empresa dá 404 e não 403?*
+   Porque, para a empresa A, a OS da B **não existe**: a RLS esconde a linha, e a consulta volta vazia, como para um id que nunca foi criado. Um 403 diria "existe, mas você não pode ver", o que já vaza informação: daria para descobrir quantas OS as outras empresas têm, testando ids. O 404 também é o comportamento natural do código: nenhuma rota precisou de um `if` novo para isso.
+
+2. *Se cada requisição grava o contexto na conexão, o que impede que a requisição seguinte use o contexto da empresa errada?*
+   Três coisas. (1) Toda requisição autenticada começa por `fn_sessao()`, que **sempre** zera o contexto e só grava a empresa se o usuário for válido e pertencer a ela. (2) O `db.js` guarda o contexto da requisição no `AsyncLocalStorage` e o compara com o que cada conexão tem gravado antes de usá-la; se for diferente, regrava. Se não der para confirmar o que está gravado (erro no meio), a conexão é **descartada**, nunca devolvida ao pool. (3) Rotas públicas usam o contexto vazio, que não vê linha nenhuma. Os testes de isolamento rodam com usuários de duas empresas alternando requisições no mesmo pool.
+
+3. *Por que o login e a aprovação usam funções `SECURITY DEFINER`, se a ideia era nada passar por cima da RLS?*
+   Porque são os únicos pontos que precisam, por definição, enxergar além de uma empresa. No login ainda não se sabe a empresa (só o e-mail). Na aprovação, a empresa nem existe ainda. Em vez de dar à API um papel que ignora a RLS em tudo, cada função faz **uma** coisa, confere o que precisa (por exemplo, `fn_aprovar_solicitacao` exige o contexto de PLATAFORMA), tem `search_path` fixo e só pode ser executada pelo `maintos_app`. O resto da API continua sob a RLS. O PLATAFORMA, inclusive, nunca grava `app.empresa_id`: por isso não vê nenhum dado operacional, nem se tentar.
+
+**Medição de desempenho** (Render na Virginia, Neon em São Paulo; ~113 ms por viagem ao banco)
+
+| Rota | Viagens antes | Viagens depois | Produção antes (mediana) |
+|---|---|---|---|
+| `/api/auth/me` | 1 | 1 | 265 ms |
+| `/api/kpis` | 3 | 2 | 490 ms |
+| consultas BD2 (cada uma) | 3 | 2 | 490 ms |
+| `/api/os` | 3 (2 em sequência) | 2 | 378 ms |
+| `/api/os/:id` | 4 (3 em sequência) | 2 | 490 ms |
+| `/api/equipamentos`, `/api/pecas`, `/api/usuarios` | 2 | 2 | 376 ms |
+
+Cada viagem a menos em sequência economiza ~113 ms em produção. A medição "depois" em produção entra no checklist do roteiro de sábado (`docs/migracao-producao.md`).
 
 ---
 
