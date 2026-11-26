@@ -38,7 +38,8 @@ describe('front estático e CSP', () => {
       assert.match(url.searchParams.get('body'), /Gostaria de agendar uma demonstração do MaintOS\.\r\n/);
     }
     assert.doesNotMatch(html, /<form[\s>]/i, 'sem formulário');
-    assert.doesNotMatch(html, /<script[\s>]/i, 'página estática, sem JavaScript');
+    // único script: o "Copiar e-mail", em arquivo próprio (a CSP bloqueia script inline)
+    assert.deepEqual([...html.matchAll(/<script[^>]*>/gi)].map((m) => m[0]), ['<script type="module" src="js/landing.js">']);
     // acessibilidade: idioma, link para pular ao conteúdo, landmarks e um único h1
     assert.match(html, /<html lang="pt-BR">/);
     assert.match(html, /<a class="pular-conteudo" href="#conteudo">/);
@@ -144,6 +145,54 @@ describe('front estático e CSP', () => {
       const texto = original.replaceAll(/<a\s[^>]*>/gi, '<a>');
       assert.doesNotMatch(texto, /(src|href|url)\s*[=(]\s*["']?(https?:)?\/\//i, `${arquivo.pathname}: URL externa`);
       assert.doesNotMatch(texto, /@import/i, `${arquivo.pathname}: @import`);
+    }
+  });
+
+  test('landing: e-mail visível com "Copiar e-mail" (aviso em aria-live) e "ou escreva para" no hero', async () => {
+    const html = (await request(app).get('/')).text;
+    const empresa = html.slice(html.indexOf('<section id="para-sua-empresa"'), html.indexOf('</section>', html.indexOf('<section id="para-sua-empresa"')));
+    assert.match(empresa, /<span id="email-contato"[^>]*>davimguerra@gmail\.com<\/span>/, 'e-mail visível em texto');
+    // o botão nasce escondido: sem JavaScript ele não faria nada, e o e-mail continua selecionável
+    assert.match(empresa, /<button type="button" id="copiar-email" class="botao secundario" hidden>Copiar e-mail<\/button>/);
+    assert.match(empresa, /<p id="aviso-copia"[^>]*role="status"[^>]*aria-live="polite"[^>]*><\/p>/);
+    const hero = html.slice(html.indexOf('<section class="landing-hero"'), html.indexOf('</section>'));
+    assert.match(hero, /<p class="landing-contato-alt">ou escreva para <a href="mailto:davimguerra@gmail\.com\?subject=[^"]+">davimguerra@gmail\.com<\/a><\/p>/);
+
+    const js = readFileSync(new URL('js/landing.js', PASTA_FRONT), 'utf8');
+    assert.match(js, /navigator\.clipboard\?\.writeText/, 'usa a Clipboard API');
+    assert.match(js, /'E-mail copiado\.'/);
+    assert.match(js, /selectNodeContents\(elemento\)/, 'se a cópia falhar, seleciona o texto');
+    assert.match(js, /botao\.hidden = false/, 'o botão só aparece com JavaScript');
+    const servido = await request(app).get('/js/landing.js');
+    assert.equal(servido.status, 200);
+    assert.match(servido.headers['content-type'], /javascript/);
+  });
+
+  test('landing: captura real do Dashboard em WebP com fallback PNG, local, com texto alternativo', async () => {
+    const html = (await request(app).get('/')).text;
+    const hero = html.slice(html.indexOf('<section class="landing-hero"'), html.indexOf('</section>'));
+    const figura = hero.slice(hero.indexOf('<figure class="landing-captura">'), hero.indexOf('</figure>'));
+    assert.ok(figura.length > 0, 'a captura fica dentro do hero, depois do texto');
+    assert.ok(hero.indexOf('landing-hero-texto') < hero.indexOf('landing-captura'), 'em telas estreitas, a imagem vai para baixo do texto');
+    assert.match(figura, /<source srcset="img\/dashboard\.webp" type="image\/webp">/);
+    const img = figura.match(/<img [^>]*>/)[0];
+    assert.match(img, /src="img\/dashboard\.png"/);
+    assert.match(img, /width="1600" height="1000"/, 'dimensões declaradas: sem salto de layout');
+    const alt = img.match(/alt="([^"]*)"/)[1];
+    assert.match(alt, /Dashboard do MaintOS/);
+    assert.ok(alt.length >= 120, 'texto alternativo descritivo, não só "captura de tela"');
+    assert.match(figura, /<div class="landing-janela-barra" aria-hidden="true">/, 'moldura decorativa escondida do leitor de tela');
+
+    for (const [arquivo, tipo, assinatura] of [['dashboard.webp', /image\/webp/, 'WEBP'], ['dashboard.png', /image\/png/, 'PNG']]) {
+      const res = await request(app).get(`/img/${arquivo}`).buffer(true).parse((r, fim) => {
+        const partes = [];
+        r.on('data', (c) => partes.push(c));
+        r.on('end', () => fim(null, Buffer.concat(partes)));
+      });
+      assert.equal(res.status, 200, arquivo);
+      assert.match(res.headers['content-type'], tipo, arquivo);
+      assert.ok(res.body.includes(assinatura), `${arquivo} é ${assinatura} de verdade`);
+      assert.ok(res.body.length < 200 * 1024, `${arquivo} otimizado (< 200 KB)`);
     }
   });
 
