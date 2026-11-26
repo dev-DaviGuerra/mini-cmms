@@ -17,6 +17,10 @@ Permite cadastrar equipamentos, abrir ordens de serviço (OS), fechá-las consum
 estoque numa transação atômica e acompanhar indicadores de manutenção (MTTR, MTBF,
 disponibilidade e custo). **Todos os dados são fictícios**, gerados pelo `database/seed.js`.
 
+É um **SaaS multiempresa** (#41): várias empresas na mesma instalação, isoladas pela
+*Row-Level Security* do PostgreSQL (ver [Multiempresa](#multiempresa-saas)). Uma empresa
+nova pede acesso na landing, e o administrador da plataforma aprova.
+
 ## Stack
 - **Banco:** PostgreSQL no [Neon](https://neon.tech) (tabelas, triggers, função de KPIs, procedure, consultas BD2)
 - **API:** Node.js 20 + Express (ES Modules), JWT, bcrypt, helmet, express-rate-limit
@@ -36,10 +40,16 @@ docs/        estudo.md (resumo de cada etapa + perguntas de banca), qss-relatori
 
 O banco de desenvolvimento é o **Neon** (PostgreSQL gerenciado), com dois bancos:
 
-| Banco | Variável no `backend/.env` | Uso |
+| Banco | Variáveis no `backend/.env` | Uso |
 |---|---|---|
-| `cmms` | `DATABASE_URL` | API e seed |
-| `cmms_test` | `DATABASE_URL_TEST` | só `npm test` (os testes criam e apagam dados) |
+| `cmms` | `DATABASE_URL` (papel `maintos_app`) e `DATABASE_URL_ADMIN` (dono) | API (app) e migrações/seed (dono) |
+| `cmms_test` | `DATABASE_URL_TEST` (`maintos_app`) e `DATABASE_URL_TEST_ADMIN` (dono) | só `npm test` (os testes criam e apagam dados) |
+
+Cada banco tem duas URLs. A API usa só o papel **`maintos_app`**: não é dono das tabelas, não
+tem `BYPASSRLS`, não pode apagar nem mudar o schema. Com ele, a Row-Level Security vale, e
+cada requisição só enxerga a própria empresa. A API **se recusa a subir** se o
+`DATABASE_URL` for de um papel que ignora a RLS. A URL do dono serve só para aplicar os
+scripts, rodar o seed e preparar os dados dos testes.
 
 Os scripts SQL são **portáveis**. Usam só PostgreSQL padrão (PL/pgSQL, `TIMESTAMPTZ`, CTEs,
 funções de janela), sem nenhum recurso exclusivo do Neon, e rodam igual em vários ambientes:
@@ -54,32 +64,42 @@ Pré-requisitos: Node.js 20 e o `psql` 16 ou mais novo (vem com o PostgreSQL). O
 o `psql` 16 é preciso por causa do `\bind`, que passa as datas para as consultas BD2.
 
 ```bash
-# 1. configurar variáveis (DATABASE_URL, DATABASE_URL_TEST, JWT_SECRET, SEED_PASSWORD)
+# 1. configurar variáveis (as 4 URLs, JWT_SECRET, SEED_PASSWORD)
 cp backend/.env.example backend/.env
 
-# 2. criar tabelas, triggers, função de KPIs, procedure e a coluna usuarios.ativo, nos DOIS bancos
-#    (ordem: 01, 02, 03, 05; o 04 só contém consultas)
-psql "$DATABASE_URL"      -f database/01_schema.sql -f database/02_triggers.sql -f database/03_procedures.sql -f database/05_usuarios_ativo.sql
-psql "$DATABASE_URL_TEST" -f database/01_schema.sql -f database/02_triggers.sql -f database/03_procedures.sql -f database/05_usuarios_ativo.sql
+# 2. papel da API, uma vez por servidor (a senha fica fora do git; troque SENHA)
+psql "$DATABASE_URL_ADMIN" -c "CREATE ROLE maintos_app LOGIN NOBYPASSRLS PASSWORD 'SENHA'"
 
-# 3. popular o banco de desenvolvimento com dados fictícios
+# 3. criar o banco nos DOIS bancos, com o DONO (ordem: 01, 02, 03, 05, 06; o 04 só tem consultas).
+#    O 06 (multiempresa) é reexecutável.
+psql "$DATABASE_URL_ADMIN"      -f database/01_schema.sql -f database/02_triggers.sql -f database/03_procedures.sql -f database/05_usuarios_ativo.sql -f database/06_multiempresa.sql
+psql "$DATABASE_URL_TEST_ADMIN" -f database/01_schema.sql -f database/02_triggers.sql -f database/03_procedures.sql -f database/05_usuarios_ativo.sql -f database/06_multiempresa.sql
+
+# 4. popular com as duas empresas fictícias (npm run seed:teste popula o cmms_test)
 cd database && npm install && npm run seed
 
-# 4. rodar as consultas BD2 (padrão: últimos 90 dias; outro período com -v)
+# 5. rodar as consultas BD2 com o papel da API (padrão: empresa 1, últimos 90 dias)
 psql "$DATABASE_URL" -f database/04_consultas_bd2.sql
-psql "$DATABASE_URL" -v data_ini=2026-09-01 -v data_fim=2026-09-30 -f database/04_consultas_bd2.sql
+psql "$DATABASE_URL" -v empresa_id=2 -v data_ini=2026-09-01 -v data_fim=2026-09-30 -f database/04_consultas_bd2.sql
 ```
 
 > As URLs do Neon contêm `&`. No terminal, use-as sempre entre aspas.
 
 Usuários criados pelo seed (senha = `SEED_PASSWORD` do `.env`):
 
-| E-mail | Perfil |
-|---|---|
-| operador@cmms.local | OPERADOR |
-| tecnico@cmms.local | TECNICO |
-| tecnico2@cmms.local | TECNICO |
-| supervisor@cmms.local | SUPERVISOR |
+| E-mail | Perfil | Empresa |
+|---|---|---|
+| operador@cmms.local | OPERADOR | Empresa Demonstração |
+| tecnico@cmms.local | TECNICO | Empresa Demonstração |
+| tecnico2@cmms.local | TECNICO | Empresa Demonstração |
+| supervisor@cmms.local | SUPERVISOR | Empresa Demonstração |
+| operador@metalurgica.local | OPERADOR | Metalúrgica Exemplo |
+| tecnico@metalurgica.local | TECNICO | Metalúrgica Exemplo |
+| supervisor@metalurgica.local | SUPERVISOR | Metalúrgica Exemplo |
+| plataforma@maintos.local | PLATAFORMA | nenhuma (administra a plataforma) |
+
+A Demonstração tem 10 equipamentos e ~200 OS; a Metalúrgica, 6 equipamentos (com as mesmas
+tags R-01, PH-01... de propósito) e ~90 OS. O seed cria também 2 pedidos de acesso pendentes.
 
 ## Como rodar a API
 
@@ -106,7 +126,12 @@ desenvolvimento. Os testes criam e apagam os próprios usuários, equipamentos e
 |---|---|---|---|
 | GET | `/api/health` | público | verificação de vida |
 | POST | `/api/auth/login` | público | `{ email, senha }` → `{ token, expiraEm, usuario }` (`LOGIN_RATE_LIMIT_MAX` tentativas/15 min, padrão 10) |
-| GET | `/api/auth/me` | qualquer logado | dados do usuário do token |
+| GET | `/api/auth/me` | qualquer logado | dados do usuário do token (com `empresaId`, `empresaNome`, `trocarSenha`) |
+| POST | `/api/solicitacoes` | público | pedido de acesso `{ empresa, responsavel, email, cidade, uf, equipamentos, consentimento: true, site }` → sempre 202 (`site` é a armadilha contra robôs); `SOLICITACAO_RATE_LIMIT_MAX` por IP/hora (padrão 5) |
+| GET | `/api/plataforma/solicitacoes?status=` | PLATAFORMA | pedidos `PENDENTE` (padrão), `APROVADA` ou `RECUSADA` |
+| POST | `/api/plataforma/solicitacoes/:id/aprovar` | PLATAFORMA | cria a empresa e o primeiro SUPERVISOR → 201 `{ empresa, supervisor, senhaTemporaria }` (a senha só aparece aqui; `Cache-Control: no-store`); já decidida: 409 `JA_DECIDIDA`; e-mail em uso: 409 `EMAIL_EM_USO` |
+| POST | `/api/plataforma/solicitacoes/:id/recusar` | PLATAFORMA | `{ motivo? }` → 200 |
+| GET | `/api/plataforma/empresas` | PLATAFORMA | nome, cidade/UF, situação e data (nada operacional) |
 | POST | `/api/os` | OPERADOR, SUPERVISOR | abre OS: `{ equipamentoId, descricao, tipo?, prioridade? }` → 201; o equipamento passa a PARADO |
 | GET | `/api/os` | qualquer logado | lista `{ dados, paginacao: { limit, offset, total } }`; filtros `status`, `prioridade`, `equipamentoId`; `limit` (padrão 50, máx. 200) e `offset` (padrão 0) |
 | GET | `/api/os/:id` | qualquer logado | detalhe com peças usadas e histórico de auditoria |
@@ -146,8 +171,8 @@ Toda resposta de erro tem o formato `{ "erro": { "codigo", "mensagem", "detalhes
 |---|---|
 | 400 | dados inválidos |
 | 401 | sem token ou token inválido |
-| 403 | perfil sem permissão |
-| 404 | não encontrado |
+| 403 | perfil sem permissão; PLATAFORMA nas rotas das empresas; `TROCA_SENHA_OBRIGATORIA` com senha temporária |
+| 404 | não encontrado, **inclusive registro de outra empresa** (para a empresa A, a OS da B não existe) |
 | 409 | estoque insuficiente ou status inválido |
 
 ## Front
@@ -159,8 +184,12 @@ API e o front, na mesma origem.
 
 | Página | Conteúdo |
 |---|---|
-| `index.html` | **landing page pública** (raiz do site): o que o sistema faz, como funciona e "Para sua empresa"; botões "Entrar" e "Solicitar demonstração" (`mailto:` com assunto e corpo prontos), com "ou escreva para" e o e-mail visível com botão "Copiar e-mail" (`js/landing.js`), para quem não tem programa de e-mail. No hero, uma captura real do Dashboard (`img/dashboard.webp`, com fallback `dashboard.png`). Sem formulário e sem gravar dados |
-| `login.html` | login em tela dividida (o JWT fica no `sessionStorage`). O 401, o "Sair" e a 404 levam para cá |
+| `index.html` | **landing page pública** (raiz do site): o que o sistema faz, como funciona e "Para sua empresa"; botões "Solicitar acesso" (formulário) e "Entrar", com "ou escreva para" (`mailto:`) e o e-mail visível com botão "Copiar e-mail" (`js/landing.js`), para quem não tem programa de e-mail. No hero, uma captura real do Dashboard (`img/dashboard.webp`, com fallback `dashboard.png`). Sem formulário e sem gravar dados |
+| `login.html` | login em tela dividida (o JWT fica no `sessionStorage`). O 401, o "Sair" e a 404 levam para cá. Depois do login, cada perfil vai para a sua página inicial (OS, painel da plataforma ou troca de senha) |
+| `solicitar-acesso.html` | formulário público de pedido de acesso, com consentimento LGPD e campo armadilha contra robôs |
+| `privacidade.html` | aviso de privacidade (quais dados, para quê, por quanto tempo, direitos) |
+| `plataforma.html` | painel do PLATAFORMA: pedidos (aprovar mostra a senha temporária uma vez; recusar com motivo) e lista de empresas |
+| `trocar-senha.html` | troca obrigatória da senha temporária no primeiro login |
 | `os.html` | indicadores do `/api/kpis/resumo`, lista de OS com filtros e paginação (filtros também pela URL: `?status=&prioridade=&equipamentoId=`); "+ Nova OS" em painel lateral para OPERADOR e SUPERVISOR |
 | `os-detalhe.html?id=N` | detalhe da OS: dados, peças com custo e histórico de auditoria; "Assumir" (TECNICO, OS aberta) e "Fechar" em painel lateral com lista de peças (TECNICO que assumiu ou SUPERVISOR). Falta de estoque: mensagem com peça, pedido e disponível, e a OS vai para "Aguardando peça" |
 | `equipamentos.html` | resumo (total, operando, parados), lista com tag, nome, linha, criticidade, status em semáforo e OS pendentes (o link abre a lista de OS filtrada); busca e filtro; cadastro em painel lateral para SUPERVISOR |
@@ -227,7 +256,7 @@ Variáveis de ambiente do serviço:
 
 | Variável | Valor | Onde é definida |
 |---|---|---|
-| `DATABASE_URL` | connection string do banco de produção no Neon | painel do Render (secreta) |
+| `DATABASE_URL` | connection string do banco de produção no Neon, com o papel **`maintos_app`** (#41) | painel do Render (secreta) |
 | `JWT_SECRET` | segredo novo, só de produção (96 caracteres hex) | painel do Render (secreta) |
 | `NODE_ENV` | `production` | `render.yaml` |
 | `NODE_VERSION` | `20` (a mesma versão da CI) | `render.yaml` |
@@ -278,36 +307,55 @@ todos os dados ficam no Neon.
 - Relatório completo do QSS (correções do Sonar, controles de segurança, cobertura e prints):
   [`docs/qss-relatorio.md`](docs/qss-relatorio.md).
 
-## Trabalhos futuros: multi-tenant (SaaS)
+## Multiempresa (SaaS)
 
-Hoje o MaintOS é **single-tenant**: cada fábrica recebe a própria instalação, com servidor,
-banco e endereço exclusivos, e o isolamento entre empresas vem da infraestrutura. Para virar
-um SaaS, com várias empresas na mesma instalação, seria preciso:
+Até a #37, cada fábrica recebia a própria instalação (*single-tenant*). Na #41 o MaintOS virou
+**multiempresa**: várias empresas na mesma instalação e no mesmo banco, isoladas pelo próprio
+PostgreSQL. A migração de produção segue o roteiro de [`docs/migracao-producao.md`](docs/migracao-producao.md).
 
-1. **Modelo de dados:** tabela `empresas` e coluna `empresa_id` em todas as tabelas
-   (usuários, equipamentos, peças, OS, movimentações, alertas, auditoria). A unicidade passa a
-   valer por empresa (tag do equipamento, código da peça), e as chaves estrangeiras não podem
-   cruzar empresas.
-2. **Isolamento no banco:** *Row-Level Security* do PostgreSQL, com políticas por
-   `empresa_id` e o valor definido por transação com `set_config('app.empresa_id', ...)`, o
-   mesmo mecanismo que a auditoria já usa para `app.usuario_id`. Assim, um `WHERE` esquecido
-   não vaza dados. As alternativas são um *schema* ou um banco por empresa, que isolam mais
-   mas são mais caras de migrar e operar.
-3. **Autenticação e perfis:** o usuário pertence a uma empresa. O middleware `autenticar` lê
-   a empresa do banco, como já faz com o perfil, e haveria um papel de administrador da
-   plataforma separado do SUPERVISOR de cada fábrica.
-4. **Regras e consultas:** `sp_kpis_equipamento`, `sp_entrada_estoque`, as triggers e as
-   consultas BD2 passam a respeitar a empresa (pela RLS ou por parâmetro).
-5. **Entrada de clientes:** cadastro da empresa, convite de usuários por e-mail e recuperação
-   de senha. Isso exige envio de e-mail por API, porque o plano free do Render bloqueia as
-   portas SMTP. A landing trocaria o `mailto:` por esse fluxo.
-6. **Operação:** plano pago (sem cold start), backups com restauração por empresa, limites e
-   rate limit por empresa, monitoramento, planos e cobrança. Opcionalmente, um subdomínio por
-   empresa (`empresa.maintos.com.br`, com certificado *wildcard*).
-7. **LGPD:** contrato e termo de tratamento de dados com cada cliente, exportação e exclusão
-   dos dados de uma empresa, e registro de acesso.
-8. **Testes de isolamento:** em todas as rotas, um usuário da empresa A não lê nem altera
-   dados da empresa B.
+**Banco (`database/06_multiempresa.sql`, reexecutável)**
+- Tabela `empresas` e coluna `empresa_id NOT NULL` nas 8 tabelas de negócio. Os dados que já
+  existiam foram para a "Empresa Demonstração". O `DEFAULT` da coluna é a empresa do contexto
+  da requisição, então os `INSERT` da API, das triggers e da procedure não mudaram.
+- Chaves estrangeiras **compostas** `(empresa_id, x_id)`: nem um bug liga a OS da empresa A ao
+  equipamento da B. Tag do equipamento e código da peça são únicos **por empresa**; o e-mail,
+  na plataforma inteira (o login é só por e-mail).
+- **Row-Level Security** com `ENABLE` e **`FORCE`** em todas as tabelas, e políticas
+  `empresa_id = current_setting('app.empresa_id')`. Sem contexto, nenhuma linha aparece.
+- Papel **`maintos_app`** para a API: sem `BYPASSRLS`, sem ser dono, sem `DELETE`.
+- Funções `SECURITY DEFINER` só para o que precisa ver além de uma empresa: `fn_login` (no
+  login ainda não há empresa), `fn_sessao` (confere o usuário e grava o contexto) e
+  `fn_aprovar_solicitacao` (cria a empresa e o primeiro supervisor).
+
+**Contexto por requisição, com poucas viagens ao banco.** A API roda no Render (Virginia) e o
+banco no Neon (São Paulo): cada viagem custa ~110 ms. No início de cada requisição autenticada,
+`fn_sessao()` confere o usuário e grava `app.empresa_id`, `app.usuario_id` e `app.plataforma`
+com `set_config`, **na mesma viagem** que a autenticação já fazia. Cada conexão do pool lembra
+qual contexto está gravado nela e só o regrava se a próxima requisição for de outra empresa.
+Além disso, o período dos KPIs é calculado no Node, e a lista e o detalhe da OS viraram uma
+consulta cada. Resultado: toda rota autenticada faz **2 viagens** (antes, de 1 a 4).
+
+**Perfis.** OPERADOR, TECNICO e SUPERVISOR pertencem a uma empresa. O **PLATAFORMA** fica fora
+das empresas (tabela `usuarios_plataforma`): vê só os pedidos de acesso e a lista de empresas, e
+recebe 403 nas rotas das empresas. Mesmo que chegasse a elas, a RLS não lhe mostraria nenhuma
+linha, porque ele nunca grava `app.empresa_id`.
+
+**Entrada de clientes.** Na landing, **Solicitar acesso** abre um formulário (empresa,
+responsável, e-mail, cidade/UF, nº de equipamentos e consentimento da LGPD, com
+[aviso de privacidade](frontend/privacidade.html)). O pedido é gravado como PENDENTE, com
+rate limit por IP, campo armadilha contra robôs e validação no servidor. O PLATAFORMA aprova
+no painel: nasce a empresa e o primeiro SUPERVISOR, com uma **senha temporária mostrada uma
+única vez**, e a troca é obrigatória no primeiro login.
+
+**Testes de isolamento.** `isolamento-api.test.js`: a empresa A não lista, não lê, não
+assume, não fecha e não altera OS, peças, equipamentos e usuários da B (404).
+`isolamento-sql.test.js`: conectado como `maintos_app`, o próprio banco não devolve nem grava
+linhas de outra empresa. `plataforma.test.js`: cadastro público, aprovação e troca obrigatória.
+
+**Ainda fora do escopo:** envio de e-mail automático (a senha temporária é repassada pelo
+administrador; o plano free do Render bloqueia SMTP), recuperação de senha, cobrança, planos,
+subdomínio por empresa, exportação e exclusão dos dados de uma empresa (LGPD), e limpeza
+automática dos pedidos recusados após 90 dias (hoje é manual).
 
 ## Fluxo de trabalho
 - Uma issue por funcionalidade, board no GitHub Projects (To Do / In Progress / Done).

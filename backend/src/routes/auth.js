@@ -1,7 +1,7 @@
 // Rotas de autenticação: /api/auth
 import { Router } from 'express';
 import { rateLimit } from 'express-rate-limit';
-import { autenticar } from '../middlewares/auth.js';
+import { autenticarQualquer } from '../middlewares/auth.js';
 import { ErroValidacao } from '../errors.js';
 import { criarValidador } from '../validacao.js';
 import { config } from '../config.js';
@@ -41,7 +41,7 @@ router.post('/login', limiteLogin, async (req, res) => {
 });
 
 // GET /api/auth/me  ->  dados do usuário do token (útil para o front validar a sessão)
-router.get('/me', autenticar, (req, res) => {
+router.get('/me', autenticarQualquer, (req, res) => {
   res.json({ usuario: req.usuario });
 });
 
@@ -58,14 +58,14 @@ const limiteSenha = rateLimit({
 });
 
 // POST /api/auth/senha  { senhaAtual, novaSenha }  ->  204. Qualquer usuário logado.
-router.post('/senha', limiteSenha, autenticar, async (req, res) => {
+router.post('/senha', limiteSenha, autenticarQualquer, async (req, res) => {
   const v = criarValidador();
   const { senhaAtual, novaSenha } = req.body ?? {};
   if (typeof senhaAtual !== 'string' || !senhaAtual || senhaAtual.length > 72) v.erro('senhaAtual é obrigatória');
   v.senha(novaSenha, 'novaSenha');
   v.verificar('Dados para troca de senha inválidos');
 
-  await authService.trocarSenha(req.usuario.id, senhaAtual, novaSenha);
+  await authService.trocarSenha(req.usuario, senhaAtual, novaSenha);
   res.status(204).end();
 });
 

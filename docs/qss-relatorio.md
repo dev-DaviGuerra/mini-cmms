@@ -73,14 +73,18 @@ A coluna PR é o pull request em que a correção entrou (o #12 é este). O deta
 | **Transações e auditoria** | toda mudança de status de OS em transação com `ROLLBACK`; a trigger `trg_auditoria_os` registra quem mudou | testes de rollback por falta de estoque e de auditoria com `usuario_id` |
 | **Arquivos internos** | `package.json`, `scripts/` e `node_modules/` do front não são servidos; corpo JSON limitado a 100 kB | `front.test.js` (404 nesses caminhos) |
 | **Segredos** | `.env` no `.gitignore`; `.env.example` sem valores reais; banco remoto com SSL e certificado verificado (`rejectUnauthorized: true`); na CI, `JWT_SECRET` aleatório por execução e o `SONAR_TOKEN` só como *secret* | varredura do histórico (seção 4) |
+| **Isolamento entre empresas** (#41) | Row-Level Security com `ENABLE` + `FORCE` nas 8 tabelas de negócio, políticas por `current_setting('app.empresa_id')` com `USING` e `WITH CHECK`; FKs compostas `(empresa_id, x_id)`; contexto gravado por `fn_sessao()` a cada requisição; conexão com contexto incerto é descartada | `isolamento-api.test.js` (404 ao ler, assumir, fechar e alterar OS, peças, equipamentos e usuários da outra empresa; token com empresa trocada dá 401) e `isolamento-sql.test.js` (como `maintos_app`: sem contexto nada aparece, UPDATE na outra empresa afeta 0 linhas, INSERT/mover para outra empresa dá 42501, FK composta dá 23503) |
+| **Papel do banco com privilégio mínimo** (#41) | a API conecta como `maintos_app`: não é dono, sem `BYPASSRLS`, sem `DELETE`, sem DDL; o dono só para migrações e seed; a API **não sobe** com papel que ignora a RLS | teste do papel (`rolsuper`/`rolbypassrls` falsos, dono de 0 tabelas); `DELETE` e `UPDATE empresas` dão 42501 |
+| **Administrador da plataforma** (#41) | perfil PLATAFORMA fora das empresas, nunca grava `app.empresa_id`; 403 nas rotas das empresas; aprovação por função `SECURITY DEFINER` que exige o contexto de plataforma; senha temporária gerada com `crypto.randomInt`, mostrada uma vez (`Cache-Control: no-store`), só o hash no banco, troca obrigatória (403 `TROCA_SENHA_OBRIGATORIA`) | `plataforma.test.js` |
+| **Cadastro público** (#41) | dados mínimos (sem CPF, telefone ou IP), consentimento LGPD obrigatório com data e versão do aviso, validação no servidor, rate limit por IP (5/h), honeypot, resposta sempre 202 (não revela e-mail existente nem robô detectado), INSERT só como PENDENTE (política de RLS) | `plataforma.test.js` (400 sem consentimento, honeypot não grava, duplicado não duplica, 429 no limite) |
 | **Dependências** | `npm audit` na CI (falha com alta/crítica); Dependabot semanal; `overrides` de `glob`/`minimatch` para versões corrigidas na árvore do c8 | `npm audit`: 0 vulnerabilidades |
 
 **Deploy (#11, Render):** o HTTPS é feito pelo balanceador do Render (certificado automático,
 HTTP redirecionado para HTTPS), e a CSP de produção inclui `upgrade-insecure-requests`. O
 mesmo Express serve o front e bloqueia os caminhos internos, com teste no modo produção.
 `trust proxy = 1`, com teste de que um `X-Forwarded-For` forjado não muda o contador do rate limit.
-**Ainda pendente:** conectar a API com um usuário do PostgreSQL que tenha só permissões de
-leitura e escrita nas tabelas (sem DDL), em vez do dono do banco.
+**Resolvido na #41:** a API conecta com o papel `maintos_app` (só `SELECT`/`INSERT`/`UPDATE`,
+sem DDL, sem `DELETE`, sem `BYPASSRLS`), e não mais com o dono do banco.
 
 ---
 

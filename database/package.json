@@ -8,7 +8,8 @@
     "node": ">=20"
   },
   "scripts": {
-    "seed": "node seed.js"
+    "seed": "node seed.js",
+    "seed:teste": "node seed.js --teste"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

@@ -39,7 +39,7 @@ export async function criarPeca({ codigo, descricao, estoqueMin, custoUnit }) {
 // grava a movimentação ENTRADA e resolve os alertas se o estoque voltar ao mínimo.
 // A peça é travada antes para responder 404 com mensagem clara, em vez do RAISE da procedure.
 export async function entradaEstoque(pecaId, qtd, usuarioId) {
-  const alertasResolvidos = await transacao(usuarioId, async (client) => {
+  const alertasResolvidos = await transacao(async (client) => {
     const peca = await client.query('SELECT id FROM pecas WHERE id = $1 FOR UPDATE', [pecaId]);
     if (!peca.rowCount) throw new ErroNaoEncontrado(`Peça ${pecaId} não encontrada`);
 

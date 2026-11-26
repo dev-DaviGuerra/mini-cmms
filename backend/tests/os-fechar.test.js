@@ -2,9 +2,8 @@ import { test, before, after, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import request from 'supertest';
 import { app } from '../src/app.js';
-import { pool } from '../src/db.js';
 import {
-  criarUsuarios, criarEquipamento, criarPeca, removerDados, encerrar, login, abrirOs,
+  pool, criarUsuarios, criarEquipamento, criarPeca, removerDados, encerrar, login, abrirOs,
 } from './helpers.js';
 
 let usuarios;

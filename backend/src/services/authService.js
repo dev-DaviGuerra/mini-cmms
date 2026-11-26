@@ -12,9 +12,13 @@ export const CUSTO_BCRYPT = 10;
 // tempo nos dois casos (não revela, pelo tempo, quais e-mails estão cadastrados).
 const HASH_FALSO = bcrypt.hashSync('senha-que-nunca-confere', CUSTO_BCRYPT);
 
+// Login: o e-mail é único na plataforma inteira (empresas e administradores da plataforma).
+// fn_login() procura nas duas tabelas de usuários: no login ainda não há empresa no
+// contexto, e a RLS não deixaria a API ver o usuário de nenhuma empresa.
 export async function login(email, senha) {
   const { rows } = await query(
-    'SELECT id, nome, email, senha_hash, perfil, ativo FROM usuarios WHERE email = $1',
+    `SELECT id, nome, email, senha_hash, perfil, ativo, trocar_senha, empresa_id, empresa_nome
+       FROM fn_login($1)`,
     [email.trim().toLowerCase()],
   );
   const usuario = rows[0];
@@ -27,8 +31,12 @@ export async function login(email, senha) {
     throw new ErroNaoAutenticado('E-mail ou senha inválidos');
   }
 
+  const plataforma = usuario.perfil === 'PLATAFORMA';
+  // "emp" = empresa do usuário; o middleware a grava no contexto (app.empresa_id) e a
+  // fn_sessao confere, a cada requisição, se o usuário ainda é daquela empresa.
   const token = jwt.sign(
-    { nome: usuario.nome, perfil: usuario.perfil },
+    plataforma ? { nome: usuario.nome, perfil: usuario.perfil, plat: true }
+      : { nome: usuario.nome, perfil: usuario.perfil, emp: usuario.empresa_id },
     config.jwtSecret,
     { subject: String(usuario.id), expiresIn: config.jwtExpiresIn, algorithm: 'HS256' },
   );
@@ -36,7 +44,15 @@ export async function login(email, senha) {
   return {
     token,
     expiraEm: config.jwtExpiresIn,
-    usuario: { id: usuario.id, nome: usuario.nome, email: usuario.email, perfil: usuario.perfil },
+    usuario: {
+      id: usuario.id,
+      nome: usuario.nome,
+      email: usuario.email,
+      perfil: usuario.perfil,
+      empresaId: usuario.empresa_id,
+      empresaNome: usuario.empresa_nome,
+      trocarSenha: usuario.trocar_senha,
+    },
   };
 }
 
@@ -44,8 +60,11 @@ export async function login(email, senha) {
 // aberta não consegue trocar a senha e "sequestrar" a conta).
 // Senha atual errada => 400 (e não 401): o usuário continua autenticado pelo token;
 // um 401 faria o front encerrar a sessão por engano.
-export async function trocarSenha(usuarioId, senhaAtual, novaSenha) {
-  const { rows } = await query('SELECT senha_hash FROM usuarios WHERE id = $1 AND ativo', [usuarioId]);
+// Também encerra a troca obrigatória (senha temporária da aprovação).
+// A RLS garante que a linha é a do próprio usuário, na própria empresa.
+export async function trocarSenha(usuario, senhaAtual, novaSenha) {
+  const tabela = usuario.perfil === 'PLATAFORMA' ? 'usuarios_plataforma' : 'usuarios';
+  const { rows } = await query(`SELECT senha_hash FROM ${tabela} WHERE id = $1 AND ativo`, [usuario.id]);
   if (!rows.length) throw new ErroNaoAutenticado('Sessão inválida');
 
   if (!(await bcrypt.compare(senhaAtual, rows[0].senha_hash))) {
@@ -56,5 +75,5 @@ export async function trocarSenha(usuarioId, senhaAtual, novaSenha) {
   }
 
   const hash = await bcrypt.hash(novaSenha, CUSTO_BCRYPT);
-  await query('UPDATE usuarios SET senha_hash = $1 WHERE id = $2', [hash, usuarioId]);
+  await query(`UPDATE ${tabela} SET senha_hash = $1, trocar_senha = FALSE WHERE id = $2`, [hash, usuario.id]);
 }

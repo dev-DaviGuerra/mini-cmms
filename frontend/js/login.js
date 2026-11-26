@@ -1,8 +1,9 @@
-// Tela de login: envia e-mail e senha, guarda o JWT e vai para a lista de OS.
-import { entrar, jaLogado, ErroApi } from './api.js';
+// Tela de login: envia e-mail e senha, guarda o JWT e vai para a página inicial do perfil
+// (lista de OS, painel da plataforma ou troca obrigatória da senha temporária).
+import { entrar, jaLogado, usuarioAtual, paginaInicial, ErroApi } from './api.js';
 import { mostrarMensagem, esconderMensagem } from './ui.js';
 
-if (jaLogado()) window.location.replace('os.html');
+if (jaLogado()) window.location.replace(paginaInicial(usuarioAtual()));
 
 const form = document.getElementById('form-login');
 const caixa = document.getElementById('mensagem');
@@ -26,8 +27,8 @@ form.addEventListener('submit', async (evento) => {
   botao.disabled = true;
   botao.textContent = 'Entrando…';
   try {
-    await entrar(email, senha);
-    window.location.replace('os.html');
+    const usuario = await entrar(email, senha);
+    window.location.replace(paginaInicial(usuario));
   } catch (erro) {
     const texto = erro instanceof ErroApi ? erro.mensagem : 'Erro inesperado ao entrar.';
     mostrarMensagem(caixa, texto, 'erro', erro.detalhes);

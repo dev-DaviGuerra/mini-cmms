@@ -18,27 +18,32 @@ Serviço). Subtítulo: "Gestão de manutenção industrial (CMMS)". Em toda tela
 - Procedure `sp_entrada_estoque(p_peca_id, p_qtd, p_usuario_id)` (CALL): soma estoque, grava
   ENTRADA e resolve alertas quando o estoque volta a ficar >= mínimo.
 - 3 consultas BD2 em `database/04_consultas_bd2.sql`.
-- `database/seed.js`: 10 equipamentos, 30 peças, ~200 OS fictícias em 90 dias.
-- `database/05_usuarios_ativo.sql` (#28): coluna `usuarios.ativo`. Ordem de aplicação: 01, 02,
-  03, 05 (o 04 só tem consultas).
+- `database/seed.js`: duas empresas (Empresa Demonstração: 10 equipamentos, 30 peças, ~200 OS;
+  Metalúrgica Exemplo: 6 equipamentos, 30 peças, ~90 OS), o PLATAFORMA e 2 pedidos pendentes.
+  `npm run seed` usa `DATABASE_URL_ADMIN`; `npm run seed:teste`, o `DATABASE_URL_TEST_ADMIN`.
+- `database/05_usuarios_ativo.sql` (#28): coluna `usuarios.ativo`.
+- `database/06_multiempresa.sql` (#41, reexecutável): ver "Multiempresa" abaixo. Ordem de
+  aplicação: 01, 02, 03, 05, 06 (o 04 só tem consultas), sempre com a URL do DONO.
 
 **API** — Node 20 + Express (ES Modules)
-- Login JWT com perfis OPERADOR / TECNICO / SUPERVISOR; senhas com bcrypt.
+- Login JWT com perfis OPERADOR / TECNICO / SUPERVISOR (por empresa) e PLATAFORMA (#41);
+  senhas com bcrypt.
 - Rotas: OS (abrir, assumir, fechar com transação e ROLLBACK), equipamentos, peças, KPIs.
 - Gestão de usuários (#28): `/api/usuarios` (SUPERVISOR) e `POST /api/auth/senha`.
 - Sempre queries parametrizadas; `helmet`; `express-rate-limit`.
 
 **Front** — HTML + JS vanilla + Chart.js
-- Telas: login, lista de OS, detalhe/fechamento da OS, usuários (SUPERVISOR), dashboard.
-- Landing page pública (#37, #39): a raiz `/` (`index.html`) não tem formulário nem grava dados
-  ("Solicitar demonstração" é um `mailto:`). O único JS é `js/landing.js` ("Copiar e-mail",
+- Telas: login, lista de OS, detalhe/fechamento da OS, usuários (SUPERVISOR), dashboard;
+  multiempresa (#41): `solicitar-acesso.html`, `privacidade.html`, `plataforma.html`
+  (PLATAFORMA) e `trocar-senha.html` (troca obrigatória da senha temporária).
+- Landing page pública (#37, #39, #41): a raiz `/` (`index.html`) não tem formulário nem grava
+  dados. O botão principal é "Solicitar acesso" (`/solicitar-acesso.html`); o "ou escreva
+  para" é um `mailto:`. O único JS da landing é `js/landing.js` ("Copiar e-mail",
   melhoria progressiva: o botão nasce `hidden`; se a Clipboard API falhar, seleciona o texto).
   A captura do hero (`img/dashboard.webp` + fallback `.png`, 1600×1000) vem do sistema rodando
   com o seed; se o visual do dashboard mudar, gerar de novo e atualizar o `alt`. O login fica em `login.html`,
   e todo redirecionamento para o login (401, "Sair", 404) aponta para `login.html`, nunca
   para a raiz. O único link externo permitido é o do GitHub (há teste).
-- Multi-tenant (SaaS) é **trabalho futuro**, registrado no README e no estudo. Hoje é uma
-  instalação por fábrica: não adicionar `empresa_id` sem o usuário pedir.
 - Escopo ampliado a pedido do usuário: telas de Equipamentos e Estoque (#26). A entrada de
   estoque fica na tela de Estoque, e o dashboard (#10) só tem indicadores e gráficos.
 - Gráficos (dashboard): Chart.js UMD local em `frontend/vendor/` (copiado por `npm run vendor`).
@@ -60,7 +65,8 @@ completo (S7637) e `npm ci --ignore-scripts` (S6505).
 **Deploy (#11): Render**, não Azure. Ver a seção "Deploy (Render)" abaixo.
 
 Fora do escopo (só se o usuário pedir): cancelamento de OS, entrada de nota, cadastro aberto
-(autocadastro) de usuários, artigo, slides.
+(autocadastro) de usuários, artigo, slides. O pedido de acesso da #41 não é autocadastro: só
+vira empresa depois da aprovação do PLATAFORMA.
 
 **Segurança de usuários (#28):**
 - Nunca apagar usuário, só desativar.
@@ -103,9 +109,14 @@ Fora do escopo (só se o usuário pedir): cancelamento de OS, entrada de nota, c
 - Todos os dados são fictícios (repositório público).
 
 ## Banco de dados: Neon
-- O banco é o **Neon** (PostgreSQL gerenciado, PG 19), com dois bancos:
-  - `cmms` (`DATABASE_URL`): usado pela API e pelo seed;
-  - `cmms_test` (`DATABASE_URL_TEST`): usado só pelo `npm test`.
+- O banco é o **Neon** (PostgreSQL gerenciado, PG 19), com dois bancos e duas URLs cada:
+  - `cmms`: `DATABASE_URL` (papel `maintos_app`, API) e `DATABASE_URL_ADMIN` (dono, migrações e
+    seed). **O `cmms` é o banco de produção** (o Render usa o mesmo): nada de testes nele;
+  - `cmms_test`: `DATABASE_URL_TEST` (`maintos_app`) e `DATABASE_URL_TEST_ADMIN` (dono), só para
+    o `npm test` e o teste no navegador.
+- O dono (`cmms_owner`) tem `BYPASSRLS`. **A API nunca usa o dono** (ela se recusa a subir).
+  A URL de produção do `maintos_app` está em
+  `C:\Users\davim\maintos-segredos\DATABASE_URL_producao_maintos_app.txt`. Nunca exibir.
 - **Nunca exibir as connection strings** (contêm usuário e senha). Para usá-las num comando,
   leia-as do `.env` sem imprimir.
 - Os scripts SQL são **portáveis**: só PostgreSQL padrão, sem recurso exclusivo do Neon. Devem
@@ -118,8 +129,8 @@ Fora do escopo (só se o usuário pedir): cancelamento de OS, entrada de nota, c
 
 ## Convenções da API
 - Camadas: `routes` (valida a entrada) → `services` (regra de negócio) → `db`.
-- Escrita com mais de um passo usa `transacao(usuarioId, fn)` de `db.js`. Ela já faz
-  `BEGIN`, `set_config('app.usuario_id', ...)`, `COMMIT`/`ROLLBACK`.
+- Escrita com mais de um passo usa `transacao(fn)` de `db.js` (`BEGIN`, `COMMIT`/`ROLLBACK`).
+  Empresa e usuário vêm do contexto da requisição (ver "Multiempresa"), não de parâmetro.
 - Erros: lançar as classes de `src/errors.js`; o middleware `erros.js` formata a resposta.
 - `trust proxy` vem de `TRUST_PROXY` (padrão 1, o balanceador do Render). Nunca `true`: o
   Express usaria o primeiro IP do `X-Forwarded-For`, que o cliente pode forjar.
@@ -183,20 +194,50 @@ Fora do escopo (só se o usuário pedir): cancelamento de OS, entrada de nota, c
   `npm ci --omit=dev --ignore-scripts`, `npm start`, `healthCheckPath: /api/health`, `plan: free`,
   `region: virginia` (não há região na América do Sul), `autoDeployTrigger: checksPass`.
   O `buildFilter` inclui `frontend/**` e o `04_consultas_bd2.sql`, que ficam fora do `rootDir`.
-- Variáveis: `DATABASE_URL` e `JWT_SECRET` só no painel do Render (`sync: false`);
+- Variáveis: `DATABASE_URL` (papel `maintos_app`, desde a #41) e `JWT_SECRET` só no painel do
+  Render (`sync: false`);
   `NODE_ENV=production`, `NODE_VERSION=20`, `LOGIN_RATE_LIMIT_MAX=10` e `TRUST_PROXY=1` no
   `render.yaml`; `PORT` é do Render. O `JWT_SECRET` de produção fica fora do git, em
   `C:\Users\davim\maintos-segredos\JWT_SECRET_producao.txt`. Nunca exibir o valor nem commitá-lo.
 - Plano free: a instância dorme após 15 min sem tráfego, e acordar leva cerca de 1 min (cold
   start). Abrir o site antes da apresentação.
 
+## Multiempresa (SaaS) — issue #41
+- Isolamento por **Row-Level Security** (`ENABLE` + `FORCE`) nas 8 tabelas de negócio, com
+  política `empresa_id = current_setting('app.empresa_id')`. Sem contexto: nenhuma linha.
+- `empresa_id NOT NULL` com `DEFAULT` = empresa do contexto: INSERT novo não precisa informá-la.
+  FKs compostas `(empresa_id, x_id)`. Tag e código únicos por empresa; e-mail único na
+  plataforma (trigger `trg_email_unico` entre `usuarios` e `usuarios_plataforma`).
+- Contexto por requisição: `autenticar` chama `fn_sessao()` (SECURITY DEFINER), que confere o
+  usuário e grava `app.empresa_id`/`app.usuario_id`/`app.plataforma` na conexão na mesma
+  viagem. `db.js` guarda o contexto no `AsyncLocalStorage`, e cada conexão do pool lembra o
+  que tem gravado (só regrava se mudar). Usar sempre `query()`/`transacao()` de `db.js`;
+  **nunca `pool.query` direto na API**.
+- Desempenho: Render (Virginia) ↔ Neon (São Paulo) ~110 ms por viagem. Não criar transação
+  nem consulta extra sem necessidade; preferir uma consulta só (subconsulta/`json_agg`).
+- Três portas: `autenticar` (empresas; PLATAFORMA leva 403), `autenticarPlataforma` e
+  `autenticarQualquer` (`/api/auth/me`, `/api/auth/senha`). Senha temporária => 403
+  `TROCA_SENHA_OBRIGATORIA` fora dessas duas rotas.
+- PLATAFORMA (`usuarios_plataforma`) nunca grava `app.empresa_id` e não vê dados operacionais.
+  Aprovar = `fn_aprovar_solicitacao` (cria empresa + SUPERVISOR com `trocar_senha`). A senha
+  temporária só aparece na resposta da aprovação (`no-store`); no banco fica só o hash.
+- Cadastro público `POST /api/solicitacoes`: rate limit `SOLICITACAO_RATE_LIMIT_MAX` (padrão 5
+  por IP/hora), honeypot `site`, consentimento obrigatório, resposta sempre 202.
+- Rota nova de empresa: o 404 entre empresas vem de graça (a RLS esconde a linha); escrever
+  teste em `isolamento-api.test.js`. Tabela nova de negócio: `empresa_id` + política no 06 (ou
+  num 07 reexecutável) + teste em `isolamento-sql.test.js`.
+- Testes: `tests/helpers.js` cria uma empresa por arquivo com o pool do DONO (contexto gravado
+  em cada conexão) e apaga tudo dela no `encerrar()`; a API dos testes usa o `maintos_app`.
+- Produção: roteiro em `docs/migracao-producao.md` (backup no Neon, 06, `DATABASE_URL`, merge,
+  testes de fumaça, como voltar atrás).
+
 ## Comandos
 ```bash
-# aplicar o banco (URLs lidas do backend/.env; sempre entre aspas por causa do &)
-psql "$DATABASE_URL"      -f database/01_schema.sql -f database/02_triggers.sql -f database/03_procedures.sql -f database/05_usuarios_ativo.sql
-psql "$DATABASE_URL_TEST" -f database/01_schema.sql -f database/02_triggers.sql -f database/03_procedures.sql -f database/05_usuarios_ativo.sql
-cd database && npm install && npm run seed
-psql "$DATABASE_URL" -f database/04_consultas_bd2.sql
+# aplicar o banco com o DONO (URLs lidas do backend/.env; sempre entre aspas por causa do &)
+psql "$DATABASE_URL_ADMIN"      -f database/01_schema.sql -f database/02_triggers.sql -f database/03_procedures.sql -f database/05_usuarios_ativo.sql -f database/06_multiempresa.sql
+psql "$DATABASE_URL_TEST_ADMIN" -f database/01_schema.sql -f database/02_triggers.sql -f database/03_procedures.sql -f database/05_usuarios_ativo.sql -f database/06_multiempresa.sql
+cd database && npm install && npm run seed        # seed:teste => cmms_test
+psql "$DATABASE_URL" -v empresa_id=1 -f database/04_consultas_bd2.sql
 cd backend && npm test && npm start
 cd backend && npm run test:cobertura   # cobertura (c8, lcov em backend/coverage/)
 ```

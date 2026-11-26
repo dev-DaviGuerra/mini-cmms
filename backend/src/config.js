@@ -27,6 +27,22 @@ const databaseUrl = emTeste ? obrigatoria('DATABASE_URL_TEST') : obrigatoria('DA
 if (emTeste && databaseUrl === process.env.DATABASE_URL) {
   throw new Error('DATABASE_URL_TEST não pode ser igual a DATABASE_URL (banco de desenvolvimento).');
 }
+// URL do DONO das tabelas (migrações, seed e preparação dos testes). A API não a usa:
+// ela conecta só com o papel maintos_app, que não ignora a Row-Level Security.
+const databaseUrlAdmin = (emTeste ? process.env.DATABASE_URL_TEST_ADMIN : process.env.DATABASE_URL_ADMIN) || null;
+if (emTeste && databaseUrlAdmin && databaseUrlAdmin === process.env.DATABASE_URL_ADMIN) {
+  throw new Error('DATABASE_URL_TEST_ADMIN não pode ser igual a DATABASE_URL_ADMIN (banco de desenvolvimento).');
+}
+
+// Pedidos de acesso (landing) por IP a cada hora. Padrão 5: barra robôs e abuso.
+export function lerLimiteSolicitacoes(valor) {
+  if (valor === undefined || valor === '') return 5;
+  const n = Number(valor);
+  if (!Number.isInteger(n) || n < 1 || n > 10000) {
+    throw new Error('SOLICITACAO_RATE_LIMIT_MAX deve ser um inteiro entre 1 e 10000.');
+  }
+  return n;
+}
 
 // Máximo de tentativas de login por IP a cada 15 minutos. Padrão 10 (produção); em
 // desenvolvimento pode ser aumentado no .env para os testes no navegador não bloquearem.
@@ -53,9 +69,11 @@ export function lerTrustProxy(valor) {
 export const config = Object.freeze({
   emTeste,
   databaseUrl,
+  databaseUrlAdmin,
   jwtSecret,
   jwtExpiresIn: '8h',
   port: Number(process.env.PORT) || 3000,
   loginRateLimitMax: lerLimiteLogin(process.env.LOGIN_RATE_LIMIT_MAX),
+  solicitacaoRateLimitMax: lerLimiteSolicitacoes(process.env.SOLICITACAO_RATE_LIMIT_MAX),
   trustProxy: lerTrustProxy(process.env.TRUST_PROXY),
 });

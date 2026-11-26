@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Solicitar acesso · MaintOS</title>
+  <meta name="description" content="Peça acesso ao MaintOS para a sua empresa: ordens de serviço, estoque de peças e indicadores de manutenção.">
+  <link rel="icon" href="img/logo.svg" type="image/svg+xml">
+  <link rel="preload" href="fontes/ibm-plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fontes/ibm-plex-sans-600.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="css/estilo.css">
+  <script type="module" src="js/solicitar-acesso.js"></script>
+</head>
+<body class="pagina-landing">
+  <a class="pular-conteudo" href="#conteudo">Pular para o conteúdo</a>
+
+  <header class="landing-topo">
+    <a class="landing-marca" href="/" aria-label="MaintOS, página inicial">
+      <img src="img/logo.svg" alt="" width="32" height="32">
+      <span>Maint<span class="marca-os">OS</span></span>
+    </a>
+    <nav class="landing-nav" aria-label="Seções da página inicial">
+      <a href="/#o-que-faz">O que faz</a>
+      <a href="/#como-funciona">Como funciona</a>
+      <a href="/#para-sua-empresa">Para sua empresa</a>
+    </nav>
+    <a class="botao no-escuro landing-entrar" href="/login.html">Entrar</a>
+  </header>
+
+  <main id="conteudo" class="landing-pagina">
+    <div class="landing-pagina-conteudo">
+      <h1>Solicitar acesso</h1>
+      <p>Conte um pouco sobre a sua empresa. Analisamos o pedido e respondemos pelo e-mail informado com o primeiro login do supervisor. Pedimos só o necessário para avaliar o pedido e entrar em contato.</p>
+
+      <div class="cartao-formulario">
+        <div id="mensagem" role="alert" hidden></div>
+
+        <form id="form-solicitacao" novalidate>
+          <div class="grade-formulario">
+            <div class="campo campo-largo">
+              <label for="empresa">Empresa <span class="obrigatorio" aria-hidden="true">*</span></label>
+              <input id="empresa" name="empresa" maxlength="120" autocomplete="organization" required>
+            </div>
+            <div class="campo">
+              <label for="responsavel">Responsável <span class="obrigatorio" aria-hidden="true">*</span></label>
+              <input id="responsavel" name="responsavel" maxlength="100" autocomplete="name" required>
+            </div>
+            <div class="campo">
+              <label for="email">E-mail <span class="obrigatorio" aria-hidden="true">*</span></label>
+              <input id="email" name="email" type="email" maxlength="150" autocomplete="email" required aria-describedby="ajuda-email">
+              <span id="ajuda-email" class="ajuda">Será o login do primeiro supervisor.</span>
+            </div>
+            <div class="campo">
+              <label for="cidade">Cidade <span class="obrigatorio" aria-hidden="true">*</span></label>
+              <input id="cidade" name="cidade" maxlength="80" autocomplete="address-level2" required>
+            </div>
+            <div class="campo">
+              <label for="uf">UF <span class="obrigatorio" aria-hidden="true">*</span></label>
+              <select id="uf" name="uf" autocomplete="address-level1" required>
+                <option value="">Selecione…</option>
+                <option>AC</option><option>AL</option><option>AP</option><option>AM</option><option>BA</option>
+                <option>CE</option><option>DF</option><option>ES</option><option>GO</option><option>MA</option>
+                <option>MT</option><option>MS</option><option>MG</option><option>PA</option><option>PB</option>
+                <option>PR</option><option>PE</option><option>PI</option><option>RJ</option><option>RN</option>
+                <option>RS</option><option>RO</option><option>RR</option><option>SC</option><option>SP</option>
+                <option>SE</option><option>TO</option>
+              </select>
+            </div>
+            <div class="campo campo-largo">
+              <label for="equipamentos">Número aproximado de equipamentos <span class="obrigatorio" aria-hidden="true">*</span></label>
+              <input id="equipamentos" name="equipamentos" type="number" min="1" max="100000" step="1" inputmode="numeric" required>
+            </div>
+          </div>
+
+          <!-- Armadilha contra robôs (honeypot): escondida de pessoas e fora do Tab -->
+          <div class="campo-armadilha" aria-hidden="true">
+            <label for="site">Não preencha este campo</label>
+            <input id="site" name="site" tabindex="-1" autocomplete="off">
+          </div>
+
+          <div class="campo-consentimento">
+            <input id="consentimento" name="consentimento" type="checkbox" required>
+            <label for="consentimento">Li o <a href="/privacidade.html">aviso de privacidade</a> e concordo que estes dados sejam usados só para avaliar o pedido e entrar em contato. <span class="obrigatorio" aria-hidden="true">*</span></label>
+          </div>
+
+          <div class="acoes-formulario">
+            <button id="botao-enviar" type="submit" class="botao primario">Enviar pedido</button>
+            <span class="ajuda"><span class="obrigatorio" aria-hidden="true">*</span> Campos obrigatórios</span>
+          </div>
+        </form>
+
+        <div id="confirmacao" class="confirmacao-envio" tabindex="-1" hidden>
+          <h2>Pedido recebido</h2>
+          <p id="confirmacao-texto"></p>
+          <p><a href="/">Voltar à página inicial</a></p>
+        </div>
+      </div>
+
+      <p class="ajuda">Prefere falar por e-mail? Escreva para <a href="mailto:davimguerra@gmail.com">davimguerra@gmail.com</a>.</p>
+    </div>
+  </main>
+
+  <footer class="landing-rodape">
+    <p>Projeto acadêmico · dados fictícios</p>
+    <a href="/privacidade.html">Aviso de privacidade</a>
+  </footer>
+</body>
+</html>

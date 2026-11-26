@@ -40,7 +40,10 @@ jobs:
       NODE_ENV: test
       # localhost => o configConexao() desliga o SSL; DATABASE_URL não é definido, então
       # não há como os testes tocarem outro banco.
-      DATABASE_URL_TEST: postgres://postgres:postgres@localhost:5432/cmms_test
+      # Multiempresa (#41): o dono (postgres) aplica os scripts e prepara os dados dos testes;
+      # a API dos testes usa o papel maintos_app (sem BYPASSRLS), como em produção. A URL dele
+      # (DATABASE_URL_TEST) é montada no passo que define a senha, gerada no próprio job.
+      DATABASE_URL_TEST_ADMIN: postgres://postgres:postgres@localhost:5432/cmms_test
       # Os testes fazem mais de 10 logins pelo mesmo IP em 15 min; o padrão de produção
       # (10) continua valendo fora daqui. É o mesmo ajuste do .env de desenvolvimento.
       LOGIN_RATE_LIMIT_MAX: 100
@@ -65,13 +68,24 @@ jobs:
           echo "::add-mask::$segredo"
           echo "JWT_SECRET=$segredo" >> "$GITHUB_ENV"
 
-      - name: Aplicar o banco (01, 02, 03 e 05)
+      # O 06 roda DUAS vezes: prova que a migração é reexecutável (o roteiro de produção
+      # pode rodá-la de novo sem estragar nada).
+      - name: Aplicar o banco (01, 02, 03, 05 e 06 duas vezes)
         run: |
-          psql "$DATABASE_URL_TEST" -v ON_ERROR_STOP=1 \
+          psql "$DATABASE_URL_TEST_ADMIN" -v ON_ERROR_STOP=1 \
             -f database/01_schema.sql \
             -f database/02_triggers.sql \
             -f database/03_procedures.sql \
-            -f database/05_usuarios_ativo.sql
+            -f database/05_usuarios_ativo.sql \
+            -f database/06_multiempresa.sql \
+            -f database/06_multiempresa.sql
+
+      - name: Senha do papel maintos_app (aleatória, só para este job)
+        run: |
+          senha=$(openssl rand -hex 24)
+          echo "::add-mask::$senha"
+          psql "$DATABASE_URL_TEST_ADMIN" -v ON_ERROR_STOP=1 -q -c "ALTER ROLE maintos_app LOGIN PASSWORD '$senha'"
+          echo "DATABASE_URL_TEST=postgres://maintos_app:$senha@localhost:5432/cmms_test" >> "$GITHUB_ENV"
 
       # --ignore-scripts: nenhum script de instalação de dependência roda na CI (ataque de
       # cadeia de suprimentos, Sonar S6505). O bcrypt já traz o binário pronto (prebuilds).
@@ -87,6 +101,7 @@ jobs:
         working-directory: backend
         run: npm run test:cobertura
 
+      # Com o papel da API: as consultas BD2 também passam pela RLS (empresa 1 por padrão)
       - name: Conferir as consultas BD2 no banco de teste
         run: psql "$DATABASE_URL_TEST" -v ON_ERROR_STOP=1 -q -o /dev/null -f database/04_consultas_bd2.sql
 

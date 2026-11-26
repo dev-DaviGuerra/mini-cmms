@@ -1,5 +1,7 @@
 // Regras de negócio das ordens de serviço (OS).
-// Toda escrita roda em transacao(), que grava app.usuario_id para a auditoria.
+// Toda escrita roda em transacao(), com o contexto da requisição (empresa e usuário; a
+// auditoria lê app.usuario_id). A RLS faz a OS, o equipamento e a peça de outra empresa
+// simplesmente não existirem para a consulta: o resultado é 404, como um id inexistente.
 import { query, transacao } from '../db.js';
 import { ErroConflito, ErroNaoEncontrado, ErroProibido } from '../errors.js';
 
@@ -21,7 +23,7 @@ const FROM_OS = `
 
 // Abrir OS (H2): numa única transação, cria a OS e coloca o equipamento como PARADO.
 export async function abrirOs({ equipamentoId, tipo, prioridade, descricao }, usuarioId) {
-  const osId = await transacao(usuarioId, async (client) => {
+  const osId = await transacao(async (client) => {
     // FOR UPDATE trava a linha do equipamento até o COMMIT: duas aberturas simultâneas
     // no mesmo equipamento ficam em fila, sem atualização perdida.
     const eq = await client.query('SELECT id FROM equipamentos WHERE id = $1 FOR UPDATE', [equipamentoId]);
@@ -66,7 +68,7 @@ function exigirStatus(os, esperado, acao) {
 // Assumir OS (H3): só OS ABERTA. Grava técnico, início e status EM_ANDAMENTO.
 // A trigger trg_auditoria_os registra ABERTA -> EM_ANDAMENTO com o usuário de app.usuario_id.
 export async function assumirOs(id, tecnicoId) {
-  await transacao(tecnicoId, async (client) => {
+  await transacao(async (client) => {
     const os = await travarOs(client, id);
     exigirStatus(os, 'ABERTA', 'assumir');
     await client.query(
@@ -113,7 +115,7 @@ export async function fecharOs(id, { causa, solucao, horas, pecas }, usuario) {
   const pecasOrdenadas = [...pecas].sort((a, b) => a.pecaId - b.pecaId);
 
   try {
-    await transacao(usuario.id, async (client) => {
+    await transacao(async (client) => {
       const os = await travarOs(client, id);
       exigirStatus(os, ['EM_ANDAMENTO', 'AGUARDANDO_PECA'], 'fechar');
       if (usuario.perfil === 'TECNICO' && os.tecnico_id !== usuario.id) {
@@ -155,7 +157,7 @@ export async function fecharOs(id, { causa, solucao, horas, pecas }, usuario) {
     });
   } catch (erro) {
     if (erro.codigo === 'ESTOQUE_INSUFICIENTE') {
-      await transacao(usuario.id, (client) => client.query(
+      await transacao((client) => client.query(
         `UPDATE ordens_servico SET status = 'AGUARDANDO_PECA'
           WHERE id = $1 AND status = 'EM_ANDAMENTO'`,
         [id],
@@ -169,6 +171,8 @@ export async function fecharOs(id, { causa, solucao, horas, pecas }, usuario) {
 
 // Lista OS com filtros opcionais e paginação (limit/offset).
 // Os filtros entram como parâmetros ($n), nunca concatenados no texto do SQL.
+// Página e total numa ÚNICA consulta (COUNT(*) OVER () = total sem o LIMIT): uma viagem ao
+// banco a menos. Só numa página vazia além do fim o total precisa de uma consulta à parte.
 export async function listarOs({ status, prioridade, equipamentoId, limit, offset }) {
   const condicoes = [];
   const parametros = [];
@@ -182,38 +186,39 @@ export async function listarOs({ status, prioridade, equipamentoId, limit, offse
   if (equipamentoId) filtrar('os.equipamento_id =', equipamentoId);
   const where = condicoes.length ? `WHERE ${condicoes.join(' AND ')}` : '';
 
-  const [total, pagina] = await Promise.all([
-    query(`SELECT COUNT(*)::int AS total FROM ordens_servico os ${where}`, parametros),
-    query(
-      `SELECT ${COLUNAS_OS} ${FROM_OS} ${where}
-       ORDER BY os.aberta_em DESC, os.id DESC
-       LIMIT $${parametros.length + 1} OFFSET $${parametros.length + 2}`,
-      [...parametros, limit, offset],
-    ),
-  ]);
-
-  return { dados: pagina.rows, paginacao: { limit, offset, total: total.rows[0].total } };
+  const { rows } = await query(
+    `SELECT ${COLUNAS_OS}, COUNT(*) OVER ()::int AS total_filtro ${FROM_OS} ${where}
+     ORDER BY os.aberta_em DESC, os.id DESC
+     LIMIT $${parametros.length + 1} OFFSET $${parametros.length + 2}`,
+    [...parametros, limit, offset],
+  );
+  let total = rows[0]?.total_filtro ?? 0;
+  if (!rows.length && offset > 0) {
+    total = (await query(`SELECT COUNT(*)::int AS total FROM ordens_servico os ${where}`, parametros)).rows[0].total;
+  }
+  const dados = rows.map(({ total_filtro: _total, ...os }) => os);
+  return { dados, paginacao: { limit, offset, total } };
 }
 
-// Detalhe da OS com peças usadas e histórico de auditoria (H9).
+// Detalhe da OS com peças usadas e histórico de auditoria (H9), numa ÚNICA consulta: as
+// listas vêm de subconsultas com json_agg, em vez de duas consultas a mais.
 export async function buscarOs(id) {
-  const { rows } = await query(`SELECT ${COLUNAS_OS} ${FROM_OS} WHERE os.id = $1`, [id]);
+  const { rows } = await query(
+    `SELECT ${COLUNAS_OS},
+            COALESCE((SELECT json_agg(json_build_object(
+                               'peca_id', op.peca_id, 'codigo', p.codigo, 'descricao', p.descricao,
+                               'qtd', op.qtd, 'custo_unit', op.custo_unit) ORDER BY p.codigo)
+                        FROM os_pecas op JOIN pecas p ON p.id = op.peca_id
+                       WHERE op.os_id = os.id), '[]') AS pecas,
+            COALESCE((SELECT json_agg(json_build_object(
+                               'status_de', a.status_de, 'status_para', a.status_para,
+                               'usuario_id', a.usuario_id, 'usuario_nome', u.nome, 'data', a.data)
+                               ORDER BY a.data, a.id)
+                        FROM os_auditoria a LEFT JOIN usuarios u ON u.id = a.usuario_id
+                       WHERE a.os_id = os.id), '[]') AS auditoria
+       ${FROM_OS} WHERE os.id = $1`,
+    [id],
+  );
   if (!rows.length) throw new ErroNaoEncontrado(`OS ${id} não encontrada`);
-
-  const [pecas, auditoria] = await Promise.all([
-    query(
-      `SELECT op.peca_id, p.codigo, p.descricao, op.qtd, op.custo_unit
-         FROM os_pecas op JOIN pecas p ON p.id = op.peca_id
-        WHERE op.os_id = $1 ORDER BY p.codigo`,
-      [id],
-    ),
-    query(
-      `SELECT a.status_de, a.status_para, a.usuario_id, u.nome AS usuario_nome, a.data
-         FROM os_auditoria a LEFT JOIN usuarios u ON u.id = a.usuario_id
-        WHERE a.os_id = $1 ORDER BY a.data, a.id`,
-      [id],
-    ),
-  ]);
-
-  return { ...rows[0], pecas: pecas.rows, auditoria: auditoria.rows };
+  return rows[0];
 }

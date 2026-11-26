@@ -3,8 +3,7 @@ import assert from 'node:assert/strict';
 import request from 'supertest';
 import bcrypt from 'bcrypt';
 import { app } from '../src/app.js';
-import { pool } from '../src/db.js';
-import { criarUsuarios, removerDados, encerrar, login, SENHA_TESTE } from './helpers.js';
+import { pool, criarUsuarios, removerDados, encerrar, login, SENHA_TESTE } from './helpers.js';
 
 let usuarios;
 const tokens = {};

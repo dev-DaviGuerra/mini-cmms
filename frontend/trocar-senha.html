@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trocar senha temporária · MaintOS</title>
+  <link rel="icon" href="img/logo.svg" type="image/svg+xml">
+  <link rel="preload" href="fontes/ibm-plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fontes/ibm-plex-sans-600.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="css/estilo.css">
+  <script type="module" src="js/trocar-senha.js"></script>
+</head>
+<body class="pagina-login">
+  <section class="login-marca" aria-label="Sobre o sistema">
+    <div class="login-logo">
+      <img src="img/logo.svg" alt="" width="40" height="40">
+      <div class="login-logo-texto">
+        <span class="login-logo-nome">Maint<span class="marca-os">OS</span></span>
+        <span class="login-logo-subtitulo">Gestão de manutenção industrial (CMMS)</span>
+      </div>
+    </div>
+    <div class="login-chamada">
+      <h2>Primeiro acesso</h2>
+      <p>A senha que você recebeu é temporária. Antes de usar o sistema, escolha uma senha que só você conheça.</p>
+    </div>
+    <p class="login-nota">Projeto acadêmico · todos os dados são fictícios</p>
+  </section>
+
+  <main class="login-formulario">
+    <div class="login-cartao">
+      <h1>Trocar senha temporária</h1>
+      <p id="saudacao">Escolha a sua senha definitiva.</p>
+
+      <div id="mensagem" role="alert" hidden></div>
+
+      <form id="form-senha" novalidate>
+        <div class="campo">
+          <label for="senha-atual">Senha temporária</label>
+          <input id="senha-atual" name="senhaAtual" type="password" autocomplete="current-password" maxlength="72" required>
+        </div>
+        <div class="campo">
+          <label for="senha-nova">Nova senha</label>
+          <input id="senha-nova" name="novaSenha" type="password" autocomplete="new-password" maxlength="72" required aria-describedby="politica-senha">
+          <span id="politica-senha" class="ajuda"></span>
+        </div>
+        <div class="campo">
+          <label for="senha-confirmacao">Confirme a nova senha</label>
+          <input id="senha-confirmacao" name="confirmacao" type="password" autocomplete="new-password" maxlength="72" required>
+        </div>
+        <button id="botao-salvar" type="submit" class="botao primario largo">Salvar e continuar</button>
+      </form>
+      <p class="login-voltar"><button id="botao-sair" type="button" class="botao secundario">Sair</button></p>
+    </div>
+  </main>
+</body>
+</html>
