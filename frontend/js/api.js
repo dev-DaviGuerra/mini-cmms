@@ -36,7 +36,8 @@ function temSessao() {
 export function sair(motivo) {
   sessionStorage.removeItem(CHAVE_TOKEN);
   sessionStorage.removeItem(CHAVE_USUARIO);
-  const destino = motivo ? `index.html?motivo=${encodeURIComponent(motivo)}` : 'index.html';
+  // login.html (a raiz / é a landing page pública)
+  const destino = motivo ? `login.html?motivo=${encodeURIComponent(motivo)}` : 'login.html';
   window.location.replace(destino);
 }
 
