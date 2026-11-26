@@ -1,0 +1,50 @@
+# Blueprint do Render: um único web service Node, que serve a API (/api) e o front
+# (frontend/) na mesma origem. O Render é o servidor web e o proxy: o balanceador dele
+# termina o HTTPS (certificado automático) e repassa as requisições ao Node por HTTP.
+# O banco fica no Neon (DATABASE_URL); o Render não hospeda o banco.
+# Referência: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: maintos
+    runtime: node
+    # Não há região na América do Sul; virginia (leste dos EUA) é a mais próxima do Brasil.
+    # A região não pode ser trocada depois de criado o serviço.
+    region: virginia
+    plan: free
+    branch: main
+    # Os comandos rodam dentro de backend/. O serviço lê ../frontend e
+    # ../database/04_consultas_bd2.sql: o runtime nativo do Render acessa arquivos fora do
+    # rootDir, mas as mudanças neles só disparam deploy se estiverem no buildFilter.
+    rootDir: backend
+    # --omit=dev: sem c8, supertest e cross-env em produção.
+    # --ignore-scripts: nenhum script de instalação roda (mesma regra da CI, Sonar S6505);
+    # o bcrypt já traz o binário pronto (prebuilds).
+    buildCommand: npm ci --omit=dev --ignore-scripts
+    startCommand: npm start
+    healthCheckPath: /api/health
+    # Só publica um commit da main depois que a CI (testes + SonarCloud) passar.
+    autoDeployTrigger: checksPass
+    buildFilter:
+      paths: # relativos à raiz do repositório
+        - backend/**
+        - frontend/**
+        - database/04_consultas_bd2.sql
+      ignoredPaths:
+        - backend/tests/**
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # mesma versão da CI (o padrão do Render para serviços novos é outra)
+      - key: NODE_VERSION
+        value: "20"
+      # tentativas de login (e de troca de senha) por IP a cada 15 min
+      - key: LOGIN_RATE_LIMIT_MAX
+        value: "10"
+      # proxies entre o cliente e o Node: o balanceador do Render
+      - key: TRUST_PROXY
+        value: "1"
+      # segredos: o Render pede os valores no painel, na criação do Blueprint
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
