@@ -101,6 +101,7 @@
   --largura-menu: 236px;
   --largura-drawer: 440px;
   --camada-menu: 10;
+  --camada-dica: 20;
   --camada-fundo-drawer: 40;
   --camada-drawer: 50;
   --anel-foco: 0 0 0 2px var(--grafite-900), 0 0 0 5px var(--destaque);
@@ -814,19 +815,60 @@ body.drawer-aberto { overflow: hidden; }
   color: var(--texto-suave);
 }
 .periodo-datas { margin-left: var(--esp-2); text-transform: none; letter-spacing: 0; color: var(--grafite-700); }
-.ajuda-bloco { margin: 0 0 var(--esp-3); }
 
-/* rótulo discreto da técnica SQL usada no bloco */
-.tecnica {
-  font-family: var(--fonte-mono);
-  font-size: 0.6875rem;
+/* ícone ⓘ discreto com a técnica SQL e a explicação do bloco (tooltip acessível).
+   Abre com o mouse (hover) e com o teclado (foco); fica aberto com o ponteiro sobre o texto;
+   Esc fecha (ativarDicas() em ui.js). O texto está no HTML e é a descrição do botão. */
+.info-dica { position: relative; display: inline-flex; flex-shrink: 0; }
+.botao-info {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--grafite-300);
+  border-radius: 50%;
+  background: var(--superficie);
   color: var(--grafite-500);
-  border: 1px solid var(--cinza-200);
-  border-radius: var(--raio-sm);
-  padding: 1px var(--esp-2);
-  white-space: nowrap;
-  background: var(--cinza-50);
+  font-family: var(--fonte-mono);
+  font-size: var(--texto-xs);
+  font-weight: 600;
+  line-height: 1;
+  cursor: help;
+  transition: color var(--transicao), border-color var(--transicao);
 }
+.botao-info:hover, .botao-info:focus-visible { color: var(--texto); border-color: var(--grafite-500); }
+.botao-info:focus-visible { border-radius: 50%; }
+.dica {
+  position: absolute;
+  top: calc(100% + var(--esp-2));
+  left: 0;
+  z-index: var(--camada-dica);
+  width: max-content;
+  max-width: min(320px, 80vw);
+  padding: var(--esp-2) var(--esp-3);
+  border-radius: var(--raio);
+  background: var(--grafite-900);
+  color: var(--branco);
+  box-shadow: var(--sombra-2);
+  font-family: var(--fonte-texto);
+  font-size: var(--texto-sm);
+  font-weight: 400;
+  line-height: 1.45;
+  letter-spacing: 0;
+  text-transform: none;
+  text-align: left;
+  translate: var(--dica-desloca, 0) 0; /* ajustado por ativarDicas() para caber na janela */
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity var(--transicao), visibility var(--transicao);
+}
+/* ponte invisível entre o botão e o texto: o ponteiro pode descer até o tooltip sem fechá-lo */
+.dica::before { content: ""; position: absolute; left: 0; right: 0; bottom: 100%; height: var(--esp-2); }
+.painel-grafico-cabecalho .dica { left: auto; right: 0; }
+.info-dica:is(:hover, :focus-within):not(.dica-fechada) .dica { visibility: visible; opacity: 1; }
+.dica-tecnica { display: block; margin-bottom: var(--esp-1); font-family: var(--fonte-mono); font-size: var(--texto-xs); color: var(--grafite-300); }
+@media (prefers-reduced-motion: reduce) { .dica { transition: none; } }
 
 .indicadores.indicadores-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 a.indicador { text-decoration: none; transition: background var(--transicao); }
@@ -847,7 +889,6 @@ a.indicador.parados.ativo:hover { background: color-mix(in srgb, var(--critico-s
 .dados-grafico summary { cursor: pointer; color: var(--texto-suave); padding: var(--esp-1) 0; }
 .dados-grafico summary:hover { color: var(--texto); }
 .dados-grafico table { margin-top: var(--esp-2); }
-.nota-tabela { margin: 0 0 var(--esp-2); font-size: var(--texto-sm); color: var(--texto-suave); }
 
 /* =====================================================================
    Login (tela dividida)

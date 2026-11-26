@@ -18,8 +18,8 @@
   <main class="conteudo">
     <header class="cabecalho-pagina">
       <h1>Dashboard</h1>
-      <fieldset class="periodo" aria-describedby="periodo-ajuda">
-        <legend class="so-leitor-de-tela">Período dos indicadores</legend>
+      <fieldset class="periodo">
+        <legend class="so-leitor-de-tela">Período dos indicadores e gráficos</legend>
         <input type="radio" id="periodo-30" name="periodo" value="30">
         <label for="periodo-30">30 dias</label>
         <input type="radio" id="periodo-90" name="periodo" value="90" checked>
@@ -35,7 +35,10 @@
     <section aria-labelledby="titulo-agora">
       <div class="titulo-bloco">
         <h2 id="titulo-agora">Agora</h2>
-        <span class="tecnica" title="Consulta usada">COUNT(*) FILTER</span>
+        <span class="info-dica">
+          <button type="button" class="botao-info" aria-label="Sobre: Agora" aria-describedby="dica-agora">i</button>
+          <span role="tooltip" id="dica-agora" class="dica"><span class="dica-tecnica">Técnica SQL: COUNT(*) FILTER (WHERE status = ...).</span> Situação atual das OS, das máquinas e do estoque. Não depende do período.</span>
+        </span>
       </div>
       <div class="indicadores indicadores-5">
         <a class="indicador aberta" href="os.html?status=ABERTA">
@@ -61,13 +64,15 @@
       </div>
     </section>
 
-    <!-- totais do período (sp_kpis_equipamento) -->
+    <!-- totais do período -->
     <section aria-labelledby="titulo-periodo">
       <div class="titulo-bloco">
         <h2 id="titulo-periodo">No período <span id="periodo-datas" class="periodo-datas mono"></span></h2>
-        <span class="tecnica" title="Consulta usada">função sp_kpis_equipamento</span>
+        <span class="info-dica">
+          <button type="button" class="botao-info" aria-label="Sobre: No período" aria-describedby="dica-periodo">i</button>
+          <span role="tooltip" id="dica-periodo" class="dica"><span class="dica-tecnica">Técnica SQL: função sp_kpis_equipamento(data_ini, data_fim).</span> O período escolhido no topo vale para estes totais e para todos os gráficos abaixo. O MTTR médio é ponderado pelas falhas: tempo total de reparo ÷ total de falhas.</span>
+        </span>
       </div>
-      <p id="periodo-ajuda" class="ajuda ajuda-bloco">O filtro de período vale para estes totais e para os gráficos de MTTR e disponibilidade. Os blocos com janela fixa trazem o período no subtítulo.</p>
       <div class="indicadores">
         <div class="indicador">
           <span class="indicador-rotulo">Falhas</span>
@@ -99,7 +104,10 @@
             <h2 id="titulo-mttr">MTTR por equipamento</h2>
             <p class="subtitulo-grafico">Horas, da abertura ao fechamento das OS corretivas</p>
           </div>
-          <span class="tecnica">função sp_kpis_equipamento</span>
+          <span class="info-dica">
+          <button type="button" class="botao-info" aria-label="Sobre: MTTR por equipamento" aria-describedby="dica-mttr">i</button>
+          <span role="tooltip" id="dica-mttr" class="dica"><span class="dica-tecnica">Técnica SQL: função sp_kpis_equipamento(data_ini, data_fim).</span> MTTR = tempo de reparo das OS corretivas fechadas ÷ nº de falhas. A linha tracejada é a média ponderada pelas falhas.</span>
+        </span>
         </div>
         <div class="grafico" id="area-mttr" role="img" aria-label="Gráfico de MTTR por equipamento (carregando)"><canvas id="grafico-mttr"></canvas></div>
         <details class="dados-grafico"><summary>Ver dados em tabela</summary><div id="tabela-mttr"></div></details>
@@ -111,7 +119,10 @@
             <h2 id="titulo-disp">Disponibilidade por equipamento</h2>
             <p class="subtitulo-grafico" id="subtitulo-disp">%, MTBF ÷ (MTBF + MTTR)</p>
           </div>
-          <span class="tecnica">função sp_kpis_equipamento</span>
+          <span class="info-dica">
+          <button type="button" class="botao-info" aria-label="Sobre: Disponibilidade por equipamento" aria-describedby="dica-disp">i</button>
+          <span role="tooltip" id="dica-disp" class="dica"><span class="dica-tecnica">Técnica SQL: função sp_kpis_equipamento(data_ini, data_fim).</span> Disponibilidade = MTBF ÷ (MTBF + MTTR). Em pontos, porque o eixo não começa no zero.</span>
+        </span>
         </div>
         <div class="grafico" id="area-disp" role="img" aria-label="Gráfico de disponibilidade por equipamento (carregando)"><canvas id="grafico-disp"></canvas></div>
         <details class="dados-grafico"><summary>Ver dados em tabela</summary><div id="tabela-disp"></div></details>
@@ -121,9 +132,12 @@
         <div class="painel-grafico-cabecalho">
           <div>
             <h2 id="titulo-pareto">Pareto das causas de falha</h2>
-            <p class="subtitulo-grafico">% de cada causa e % acumulado · todas as OS corretivas fechadas (janela fixa da consulta)</p>
+            <p class="subtitulo-grafico" id="subtitulo-pareto">% de cada causa e % acumulado</p>
           </div>
-          <span class="tecnica">CTE + função de janela</span>
+          <span class="info-dica">
+          <button type="button" class="botao-info" aria-label="Sobre: Pareto das causas de falha" aria-describedby="dica-pareto">i</button>
+          <span role="tooltip" id="dica-pareto" class="dica"><span class="dica-tecnica">Técnica SQL: CTE (WITH) + função de janela SUM() OVER (ORDER BY ...).</span> Conta as OS corretivas fechadas abertas no período, por causa. As causas até cerca de 80% do acumulado são a classe A (as poucas vitais).</span>
+        </span>
         </div>
         <div class="grafico grafico-alto" id="area-pareto" role="img" aria-label="Pareto das causas de falha (carregando)"><canvas id="grafico-pareto"></canvas></div>
         <details class="dados-grafico"><summary>Ver dados em tabela</summary><div id="tabela-pareto"></div></details>
@@ -133,9 +147,12 @@
         <div class="painel-grafico-cabecalho">
           <div>
             <h2 id="titulo-pecas">Top 5 peças consumidas</h2>
-            <p class="subtitulo-grafico">Unidades nos últimos 30 dias (janela fixa da consulta)</p>
+            <p class="subtitulo-grafico" id="subtitulo-pecas">Unidades consumidas</p>
           </div>
-          <span class="tecnica">JOIN + GROUP BY / HAVING</span>
+          <span class="info-dica">
+          <button type="button" class="botao-info" aria-label="Sobre: Top 5 peças consumidas" aria-describedby="dica-pecas">i</button>
+          <span role="tooltip" id="dica-pecas" class="dica"><span class="dica-tecnica">Técnica SQL: JOIN + GROUP BY / HAVING.</span> Soma as saídas de estoque de cada peça no período, com o custo estimado e quantas OS usaram a peça.</span>
+        </span>
         </div>
         <div class="grafico" id="area-pecas" role="img" aria-label="Top 5 peças consumidas (carregando)"><canvas id="grafico-pecas"></canvas></div>
         <details class="dados-grafico"><summary>Ver dados em tabela</summary><div id="tabela-pecas"></div></details>
@@ -145,9 +162,12 @@
         <div class="painel-grafico-cabecalho">
           <div>
             <h2 id="titulo-acima">MTTR acima da média</h2>
-            <p class="subtitulo-grafico">Últimos 90 dias (janela fixa da consulta)</p>
+            <p class="subtitulo-grafico" id="subtitulo-acima">Equipamentos acima da média</p>
           </div>
-          <span class="tecnica">subquery</span>
+          <span class="info-dica">
+          <button type="button" class="botao-info" aria-label="Sobre: MTTR acima da média" aria-describedby="dica-acima">i</button>
+          <span role="tooltip" id="dica-acima" class="dica"><span class="dica-tecnica">Técnica SQL: subquery escalar com AVG sobre sp_kpis_equipamento.</span> Compara o MTTR de cada equipamento com a média simples dos MTTR dos equipamentos. O card "MTTR médio" é ponderado pelas falhas, por isso os valores podem diferir.</span>
+        </span>
         </div>
         <div id="tabela-acima" class="tabela-rolagem"></div>
       </section>

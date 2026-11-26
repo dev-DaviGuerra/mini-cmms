@@ -1,15 +1,17 @@
 // Dashboard: só indicadores e gráficos (Chart.js servido localmente).
 // - "Agora": /api/kpis/resumo (situação atual, não depende do período)
 // - "No período" e gráficos de MTTR/disponibilidade: /api/kpis?inicio&fim (sp_kpis_equipamento)
-// - Pareto, top 5 peças e MTTR acima da média: consultas BD2 (janelas fixas do próprio SQL)
+// - Pareto, top 5 peças e MTTR acima da média: consultas BD2, no mesmo período (?inicio&fim)
+// A técnica SQL de cada bloco fica no tooltip ⓘ do HTML (ativarDicas, em ui.js).
 // Regras de visualização seguidas: um eixo por gráfico (sem eixo duplo), barras começam no 0,
 // disponibilidade em pontos (eixo começa perto dos valores, por isso não é barra), referências
 // (média, 80%) em tinta neutra tracejada, legenda só com 2+ séries e tabela em cada gráfico.
 import { api, exigirLogin, ErroApi } from './api.js';
-import { el, limpar, montarLayout, mostrarMensagem, estadoVazio } from './ui.js';
+import { el, limpar, montarLayout, mostrarMensagem, estadoVazio, ativarDicas } from './ui.js';
 
 const usuario = await exigirLogin();
 montarLayout(usuario, 'dashboard');
+ativarDicas();
 
 const { Chart } = window;
 const $ = (id) => document.getElementById(id);
@@ -21,6 +23,7 @@ const num = (v, casas = 1) => Number(v).toLocaleString('pt-BR', { minimumFractio
 const moeda = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 const moedaCurta = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', notation: 'compact', maximumFractionDigits: 1 });
 const dataBr = (iso) => iso.split('-').reverse().join('/');
+const periodoBr = ({ inicio, fim }) => `${dataBr(inicio)} a ${dataBr(fim)}`;
 
 // data local AAAA-MM-DD (o filtro usa o dia do usuário; a API valida e calcula no banco)
 function dataLocal(d) {
@@ -289,21 +292,20 @@ function renderDisponibilidade(eqs, dispMedia) {
     ordenados.map((e) => [e.tag, e.nome, `${num(e.disponibilidade, 2)}%`, moeda.format(e.custo_total)]), { numericas: [2, 3], fixas: [0] });
 }
 
-async function carregarPeriodo(dias) {
-  const fim = new Date();
-  const inicio = new Date(fim);
-  inicio.setDate(inicio.getDate() - dias);
+async function carregarTotais(periodo, atual) {
   for (const id of ['tot-falhas', 'tot-mttr', 'tot-disp', 'tot-custo']) {
     limpar($(id));
     $(id).append(el('span', { classe: 'skeleton valor' }));
   }
   try {
-    const k = await api.get(`/kpis?inicio=${dataLocal(inicio)}&fim=${dataLocal(fim)}`);
-    $('periodo-datas').textContent = `${dataBr(k.inicio)} a ${dataBr(k.fim)}`;
+    const k = await api.get(`/kpis?${periodo}`);
+    if (!atual()) return;
+    $('periodo-datas').textContent = periodoBr(k);
     const { mttrMedio, dispMedia } = renderTotais(k.equipamentos);
     renderMttr(k.equipamentos, mttrMedio);
     renderDisponibilidade(k.equipamentos, dispMedia);
   } catch (erro) {
+    if (!atual()) return;
     for (const id of ['tot-falhas', 'tot-mttr', 'tot-disp', 'tot-custo']) $(id).textContent = '—';
     erroNoBloco('grafico-mttr', erro);
     erroNoBloco('grafico-disp', erro);
@@ -311,12 +313,19 @@ async function carregarPeriodo(dias) {
 }
 
 // ---------------------------------------------------------------------------------------
-// Consultas BD2 (janelas fixas do SQL)
+// Consultas BD2 (database/04_consultas_bd2.sql), no período escolhido
 // ---------------------------------------------------------------------------------------
-async function carregarPareto() {
+async function carregarPareto(periodo, atual) {
   try {
-    const linhas = await api.get('/kpis/pareto-causas');
-    if (!linhas.length) { vazio('grafico-pareto', 'Sem falhas registradas', 'O Pareto aparece quando houver OS corretivas fechadas.'); return; }
+    const r = await api.get(`/kpis/pareto-causas?${periodo}`);
+    if (!atual()) return;
+    const { linhas } = r;
+    $('subtitulo-pareto').textContent = `% de cada causa e % acumulado · ${periodoBr(r)}`;
+    if (!linhas.length) {
+      vazio('grafico-pareto', 'Sem falhas no período', 'O Pareto aparece quando houver OS corretivas fechadas abertas no período.');
+      limpar($('tabela-pareto'));
+      return;
+    }
     const rotulos = linhas.map((l) => quebrar(l.causa));
     // UM eixo (0–100%): barras = % de cada causa, linha = % acumulado. Sem eixo duplo.
     desenhar('grafico-pareto', {
@@ -355,14 +364,21 @@ async function carregarPareto() {
     tabela($('tabela-pareto'), ['Causa', 'OS', '%', '% acumulado', 'Classe'],
       linhas.map((l) => [l.causa, l.qtd, `${num(l.pct)}%`, `${num(l.pct_acumulado)}%`, l.classe]), { numericas: [1, 2, 3] });
   } catch (erro) {
-    erroNoBloco('grafico-pareto', erro);
+    if (atual()) erroNoBloco('grafico-pareto', erro);
   }
 }
 
-async function carregarTopPecas() {
+async function carregarTopPecas(periodo, atual) {
   try {
-    const linhas = await api.get('/kpis/top-pecas');
-    if (!linhas.length) { vazio('grafico-pecas', 'Sem consumo', 'Nenhuma peça saiu do estoque nos últimos 30 dias.'); return; }
+    const r = await api.get(`/kpis/top-pecas?${periodo}`);
+    if (!atual()) return;
+    const { linhas } = r;
+    $('subtitulo-pecas').textContent = `Unidades consumidas · ${periodoBr(r)}`;
+    if (!linhas.length) {
+      vazio('grafico-pecas', 'Sem consumo', 'Nenhuma peça saiu do estoque no período.');
+      limpar($('tabela-pecas'));
+      return;
+    }
     desenhar('grafico-pecas', {
       type: 'bar',
       data: {
@@ -382,31 +398,38 @@ async function carregarTopPecas() {
           },
         },
       },
-    }, `Top 5 peças consumidas em 30 dias. Primeira: ${linhas[0].codigo}, ${linhas[0].qtd_consumida} unidades.`);
+    }, `Top 5 peças consumidas de ${periodoBr(r)}. Primeira: ${linhas[0].codigo}, ${linhas[0].qtd_consumida} unidades.`);
     tabela($('tabela-pecas'), ['Código', 'Descrição', 'Unid.', 'OS', 'Custo', 'Estoque'],
       linhas.map((l) => [l.codigo, l.descricao, l.qtd_consumida, l.qtd_os, moedaCurta.format(l.custo_estimado), `${l.estoque_atual} / mín. ${l.estoque_min}`]),
       { numericas: [2, 3, 4], fixas: [0, 5] });
   } catch (erro) {
-    erroNoBloco('grafico-pecas', erro);
+    if (atual()) erroNoBloco('grafico-pecas', erro);
   }
 }
 
-async function carregarMttrAcima() {
+async function carregarMttrAcima(periodo, atual) {
   const alvo = $('tabela-acima');
+  const subtitulo = $('subtitulo-acima');
   try {
-    const linhas = await api.get('/kpis/mttr-acima-media');
+    const r = await api.get(`/kpis/mttr-acima-media?${periodo}`);
+    if (!atual()) return;
+    const { linhas } = r;
     limpar(alvo);
-    if (!linhas.length) { alvo.append(estadoVazio({ titulo: 'Nenhum equipamento acima da média', texto: 'Todos estão na média ou abaixo dela.' })); return; }
+    alvo.removeAttribute('aria-busy');
+    if (!linhas.length) {
+      subtitulo.textContent = periodoBr(r);
+      alvo.append(estadoVazio({ titulo: 'Nenhum equipamento acima da média', texto: 'No período, todos estão na média ou abaixo dela.' }));
+      return;
+    }
+    // média SIMPLES dos MTTR dos equipamentos (AVG na subquery); a diferença para o card
+    // "MTTR médio" (ponderado pelas falhas) é explicada no tooltip ⓘ do bloco
     const media = linhas[0].mttr_medio_h;
-    // a consulta BD2 compara com a média SIMPLES dos MTTR dos equipamentos (AVG na subquery);
-    // o card "MTTR médio" usa a média ponderada pelas falhas — por isso os valores diferem
-    alvo.append(el('p', {
-      classe: 'nota-tabela',
-      texto: `Média simples dos MTTR dos equipamentos: ${num(media, 2)} h (o card "MTTR médio" é ponderado pelas falhas).`,
-    }));
+    subtitulo.textContent = `${periodoBr(r)} · média simples ${num(media, 2)} h`;
     tabela(alvo.appendChild(el('div')), ['Tag', 'Equipamento', 'Falhas', 'MTTR', 'Acima da média'],
       linhas.map((l) => [l.tag, l.nome, l.n_falhas, `${num(l.mttr_h, 2)} h`, `+${num(l.mttr_h - media, 2)} h`]), { numericas: [2, 3, 4], fixas: [0] });
   } catch (erro) {
+    if (!atual()) return;
+    alvo.removeAttribute('aria-busy');
     limpar(alvo);
     mostrarMensagem(alvo, `Não foi possível carregar: ${erro instanceof ErroApi ? erro.mensagem : erro.message}`);
     alvo.hidden = false;
@@ -420,14 +443,27 @@ if (!Chart) {
   mostrarMensagem(caixa, 'Não foi possível carregar a biblioteca de gráficos (vendor/chart.umd.min.js).');
 }
 
+// Tudo o que depende do período é recarregado junto. Se o usuário trocar o período antes de
+// as respostas chegarem, só a última troca é desenhada (as respostas antigas são ignoradas).
+let geracao = 0;
+function carregarPeriodo(dias) {
+  const minha = ++geracao;
+  const atual = () => minha === geracao;
+  const fim = new Date();
+  const inicio = new Date(fim);
+  inicio.setDate(inicio.getDate() - dias);
+  const periodo = `inicio=${dataLocal(inicio)}&fim=${dataLocal(fim)}`;
+  $('tabela-acima').setAttribute('aria-busy', 'true');
+  return Promise.all([
+    carregarTotais(periodo, atual),
+    carregarPareto(periodo, atual),
+    carregarTopPecas(periodo, atual),
+    carregarMttrAcima(periodo, atual),
+  ]);
+}
+
 for (const radio of document.querySelectorAll('input[name="periodo"]')) {
   radio.addEventListener('change', () => { void carregarPeriodo(Number(radio.value)); });
 }
 
-await Promise.all([
-  carregarResumo(),
-  carregarPeriodo(90),
-  carregarPareto(),
-  carregarTopPecas(),
-  carregarMttrAcima(),
-]);
+await Promise.all([carregarResumo(), carregarPeriodo(90)]);

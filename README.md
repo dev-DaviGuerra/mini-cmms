@@ -43,7 +43,8 @@ funções de janela), sem nenhum recurso exclusivo do Neon, e rodam igual em vá
 A conexão da API e do seed usa SSL com verificação de certificado sempre que o host não é
 `localhost`.
 
-Pré-requisitos: Node.js 20 e o `psql` (vem com o PostgreSQL).
+Pré-requisitos: Node.js 20 e o `psql` 16 ou mais novo (vem com o PostgreSQL). O servidor pode ser 14+;
+o `psql` 16 é preciso por causa do `\bind`, que passa as datas para as consultas BD2.
 
 ```bash
 # 1. configurar variáveis (DATABASE_URL, DATABASE_URL_TEST, JWT_SECRET, SEED_PASSWORD)
@@ -57,8 +58,9 @@ psql "$DATABASE_URL_TEST" -f database/01_schema.sql -f database/02_triggers.sql 
 # 3. popular o banco de desenvolvimento com dados fictícios
 cd database && npm install && npm run seed
 
-# 4. rodar as consultas BD2
+# 4. rodar as consultas BD2 (padrão: últimos 90 dias; outro período com -v)
 psql "$DATABASE_URL" -f database/04_consultas_bd2.sql
+psql "$DATABASE_URL" -v data_ini=2026-09-01 -v data_fim=2026-09-30 -f database/04_consultas_bd2.sql
 ```
 
 > As URLs do Neon contêm `&`. No terminal, use-as sempre entre aspas.
@@ -111,9 +113,9 @@ desenvolvimento. Os testes criam e apagam os próprios usuários, equipamentos e
 | GET | `/api/alertas` | SUPERVISOR | alertas de estoque mínimo pendentes |
 | GET | `/api/kpis?inicio=&fim=` | qualquer logado | `sp_kpis_equipamento` por equipamento (datas `AAAA-MM-DD`; padrão: últimos 90 dias) → `{ inicio, fim, equipamentos }` |
 | GET | `/api/kpis/resumo` | qualquer logado | cards: OS abertas, em andamento, aguardando peça, equipamentos parados, alertas pendentes |
-| GET | `/api/kpis/mttr-acima-media` | qualquer logado | consulta BD2 nº 1 (subquery) |
-| GET | `/api/kpis/top-pecas` | qualquer logado | consulta BD2 nº 2 (top 5 peças em 30 dias) |
-| GET | `/api/kpis/pareto-causas` | qualquer logado | consulta BD2 nº 3 (CTE + janela) |
+| GET | `/api/kpis/mttr-acima-media?inicio=&fim=` | qualquer logado | consulta BD2 nº 1 (subquery) → `{ inicio, fim, linhas }` |
+| GET | `/api/kpis/top-pecas?inicio=&fim=` | qualquer logado | consulta BD2 nº 2 (top 5 peças consumidas no período) → `{ inicio, fim, linhas }` |
+| GET | `/api/kpis/pareto-causas?inicio=&fim=` | qualquer logado | consulta BD2 nº 3 (CTE + janela) → `{ inicio, fim, linhas }` |
 | POST | `/api/auth/senha` | qualquer logado | `{ senhaAtual, novaSenha }` → 204; senha atual errada: 400 (não 401) |
 | GET | `/api/usuarios` | SUPERVISOR | `[{ id, nome, email, perfil, ativo }]`, nunca o hash |
 | POST | `/api/usuarios` | SUPERVISOR | `{ nome, email, perfil, senha }` → 201; e-mail duplicado: 409 `EMAIL_DUPLICADO` |
@@ -127,7 +129,9 @@ na próxima requisição, porque o middleware consulta o banco a cada chamada.
 
 As três rotas BD2 executam o SQL **do próprio** `database/04_consultas_bd2.sql`. A API lê o
 arquivo ao subir e separa as consultas pelos marcadores `-- @consulta <nome>`. Assim, o psql e a
-API rodam o mesmo texto.
+API rodam o mesmo texto. As três recebem o período como `$1` (início) e `$2` (fim), com as
+mesmas datas e o mesmo padrão (últimos 90 dias) de `/api/kpis`; no psql, os valores chegam
+pelo `\bind`. No dashboard, o filtro 30/90/180 dias vale para todos os blocos, menos o "Agora".
 
 Toda resposta de erro tem o formato `{ "erro": { "codigo", "mensagem", "detalhes" } }`:
 
@@ -152,7 +156,7 @@ abra **http://localhost:3000**. No deploy, quem serve os arquivos é o NGINX.
 | `os-detalhe.html?id=N` | detalhe da OS: dados, peças com custo e histórico de auditoria; "Assumir" (TECNICO, OS aberta) e "Fechar" em painel lateral com lista de peças (TECNICO que assumiu ou SUPERVISOR). Falta de estoque: mensagem com peça, pedido e disponível, e a OS vai para "Aguardando peça" |
 | `equipamentos.html` | resumo (total, operando, parados), lista com tag, nome, linha, criticidade, status em semáforo e OS pendentes (o link abre a lista de OS filtrada); busca e filtro; cadastro em painel lateral para SUPERVISOR |
 | `estoque.html` | resumo (peças, abaixo do mínimo, valor em estoque), lista com destaque das peças abaixo do mínimo (que aparecem primeiro); para SUPERVISOR: alertas pendentes e "Entrada de estoque" em painel lateral (`CALL sp_entrada_estoque`) |
-| `dashboard.html` | só indicadores e gráficos (Chart.js local em `vendor/`): situação atual (`/kpis/resumo`); totais do período de 30, 90 ou 180 dias (falhas, MTTR médio, disponibilidade média, custo); MTTR e disponibilidade por equipamento; Pareto de causas; top 5 peças; tabela "MTTR acima da média". Cada bloco indica a técnica SQL usada |
+| `dashboard.html` | só indicadores e gráficos (Chart.js local em `vendor/`): situação atual (`/kpis/resumo`); totais do período de 30, 90 ou 180 dias (falhas, MTTR médio, disponibilidade média, custo); MTTR e disponibilidade por equipamento; Pareto de causas; top 5 peças; tabela "MTTR acima da média". O período vale para todos os blocos, menos a situação atual. A técnica SQL e as explicações ficam no tooltip ⓘ de cada bloco (mouse ou teclado) |
 | `usuarios.html` | só SUPERVISOR (o item do menu aparece só para ele): lista de usuários, cadastro em painel lateral e ativar/desativar |
 | (todas as telas) | "Trocar senha" no rodapé do menu, em painel lateral, para qualquer perfil |
 | `404.html` | página para endereços inexistentes fora de `/api` (dentro de `/api` a resposta é JSON) |

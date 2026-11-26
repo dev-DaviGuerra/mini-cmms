@@ -5,13 +5,20 @@ import assert from 'node:assert/strict';
 import request from 'supertest';
 import { app } from '../src/app.js';
 import { pool } from '../src/db.js';
-import { separarConsultas } from '../src/consultasBd2.js';
+import { separarConsultas, CONSULTAS_BD2 } from '../src/consultasBd2.js';
 import { criarUsuarios, criarEquipamento, criarPeca, removerDados, encerrar, login } from './helpers.js';
 
 let usuarios;
 let e1; let e2; let e3;
 let p1; let p2;
 const tokens = {};
+
+// data local AAAA-MM-DD de N dias atrás (as saídas do cenário ficam longe das bordas)
+function diasAtras(n) {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 const get = (rota, chave = 'OPERADOR') => request(app).get(rota).set('Authorization', `Bearer ${tokens[chave]}`);
 
@@ -154,16 +161,43 @@ describe('consultas BD2 (SQL de database/04_consultas_bd2.sql)', () => {
     assert.ok(ms < 200, `levou ${ms.toFixed(1)} ms`);
   });
 
-  test('MTTR acima da média: só E1 (3h > média 2h)', async () => {
+  test('as três consultas do arquivo recebem o período em $1 e $2', () => {
+    assert.deepEqual(Object.keys(CONSULTAS_BD2).sort(), ['mttr-acima-media', 'pareto-causas', 'top-pecas']);
+    for (const [nome, sql] of Object.entries(CONSULTAS_BD2)) {
+      assert.ok(sql.includes('$1') && sql.includes('$2'), nome);
+      assert.ok(!sql.includes(String.raw`\bind`), `${nome}: linha do psql não pode ir para a API`);
+    }
+  });
+
+  test('MTTR acima da média: só E1 (3h > média 2h); devolve o período usado', async () => {
     const res = await get('/api/kpis/mttr-acima-media', 'SUPERVISOR');
     assert.equal(res.status, 200);
-    assert.deepEqual(res.body.map((r) => [r.tag, r.mttr_h, r.mttr_medio_h]), [[e1.tag, 3, 2]]);
+    const dias = (new Date(res.body.fim) - new Date(res.body.inicio)) / 86400000;
+    assert.equal(dias, 90, 'padrão: últimos 90 dias');
+    assert.deepEqual(res.body.linhas.map((r) => [r.tag, r.mttr_h, r.mttr_medio_h]), [[e1.tag, 3, 2]]);
+  });
+
+  test('MTTR acima da média respeita o período: só a falha de E3 (3 dias atrás) => ninguém acima', async () => {
+    // em 4 dias só cabe a falha de E3 (aberta há 72 h): um único MTTR é igual à média
+    const res = await get(`/api/kpis/mttr-acima-media?inicio=${diasAtras(4)}&fim=${diasAtras(0)}`);
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body.linhas, []);
+  });
+
+  test('top peças: padrão de 90 dias inclui a saída de 40 dias atrás', async () => {
+    const res = await get('/api/kpis/top-pecas');
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body.linhas.map((r) => [r.codigo, r.qtd_consumida, r.custo_estimado]), [
+      [p2.codigo, 102, 408],
+      [p1.codigo, 5, 50],
+    ]);
   });
 
   test('top peças em 30 dias: p1 (5) antes de p2 (2); a saída de 40 dias atrás fica de fora', async () => {
-    const res = await get('/api/kpis/top-pecas');
+    const res = await get(`/api/kpis/top-pecas?inicio=${diasAtras(30)}&fim=${diasAtras(0)}`);
     assert.equal(res.status, 200);
-    assert.deepEqual(res.body.map((r) => [r.codigo, r.qtd_consumida, r.custo_estimado]), [
+    assert.deepEqual([res.body.inicio, res.body.fim], [diasAtras(30), diasAtras(0)]);
+    assert.deepEqual(res.body.linhas.map((r) => [r.codigo, r.qtd_consumida, r.custo_estimado]), [
       [p1.codigo, 5, 50],
       [p2.codigo, 2, 8],
     ]);
@@ -172,10 +206,32 @@ describe('consultas BD2 (SQL de database/04_consultas_bd2.sql)', () => {
   test('Pareto de causas: A 66,67% e B acumulando 100%', async () => {
     const res = await get('/api/kpis/pareto-causas');
     assert.equal(res.status, 200);
-    assert.deepEqual(res.body.map((r) => [r.causa, r.qtd, r.pct, r.pct_acumulado]), [
+    assert.deepEqual(res.body.linhas.map((r) => [r.causa, r.qtd, r.pct, r.pct_acumulado]), [
       ['Causa A', 2, 66.67, 66.67],
       ['Causa B', 1, 33.33, 100],
     ]);
+  });
+
+  test('Pareto respeita o período: em 4 dias só a falha de E3 (Causa B, 100%)', async () => {
+    const res = await get(`/api/kpis/pareto-causas?inicio=${diasAtras(4)}&fim=${diasAtras(0)}`);
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body.linhas.map((r) => [r.causa, r.qtd, r.pct_acumulado]), [['Causa B', 1, 100]]);
+  });
+
+  test('consultas BD2 fora do período das OS: listas vazias', async () => {
+    for (const rota of ['mttr-acima-media', 'top-pecas', 'pareto-causas']) {
+      const res = await get(`/api/kpis/${rota}?inicio=2020-01-01&fim=2020-01-31`);
+      assert.equal(res.status, 200, rota);
+      assert.deepEqual(res.body, { inicio: '2020-01-01', fim: '2020-01-31', linhas: [] }, rota);
+    }
+  });
+
+  test('consultas BD2 com datas inválidas: 400', async () => {
+    for (const rota of ['mttr-acima-media', 'top-pecas', 'pareto-causas']) {
+      for (const q of ['inicio=2026-13-01', 'fim=ontem', 'inicio=2026-05-10&fim=2026-05-01']) {
+        assert.equal((await get(`/api/kpis/${rota}?${q}`)).status, 400, `${rota} ${q}`);
+      }
+    }
   });
 
   test('todas as rotas de KPI exigem login (401) e aceitam qualquer perfil', async () => {

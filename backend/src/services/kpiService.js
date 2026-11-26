@@ -12,25 +12,29 @@ function numerico(linhas, campos) {
   });
 }
 
-// KPIs por equipamento no período. Sem datas: últimos 90 dias até hoje (data do banco).
-export async function kpisPorEquipamento({ inicio, fim }) {
-  // ::text devolve 'AAAA-MM-DD' (sem isso o pg converte DATE em Date do JS, com fuso horário)
-  const periodo = await query(
+// Período efetivo: sem datas, últimos 90 dias até hoje (data do banco).
+// ::text devolve 'AAAA-MM-DD' (sem isso o pg converte DATE em Date do JS, com fuso horário)
+async function resolverPeriodo({ inicio, fim } = {}) {
+  const { rows } = await query(
     `SELECT COALESCE($2::date, CURRENT_DATE)::text                            AS fim,
             COALESCE($1::date, COALESCE($2::date, CURRENT_DATE) - 90)::text   AS inicio`,
     [inicio ?? null, fim ?? null],
   );
-  const { inicio: ini, fim: fi } = periodo.rows[0];
+  return rows[0];
+}
 
+// KPIs por equipamento no período.
+export async function kpisPorEquipamento(periodo) {
+  const { inicio, fim } = await resolverPeriodo(periodo);
   const { rows } = await query(
     `SELECT equipamento_id, tag, nome, linha, n_falhas, mttr_h, mtbf_h, disponibilidade, custo_total
        FROM sp_kpis_equipamento($1::date, $2::date)`,
-    [ini, fi],
+    [inicio, fim],
   );
 
   return {
-    inicio: ini,
-    fim: fi,
+    inicio,
+    fim,
     equipamentos: numerico(rows, ['mttr_h', 'mtbf_h', 'disponibilidade', 'custo_total']),
   };
 }
@@ -47,18 +51,14 @@ export async function resumo() {
   return rows[0];
 }
 
-// Consultas BD2: SQL lido de database/04_consultas_bd2.sql (mesmo texto do psql).
-export async function mttrAcimaDaMedia() {
-  const { rows } = await query(CONSULTAS_BD2['mttr-acima-media']);
-  return numerico(rows, ['mttr_h', 'mttr_medio_h']);
+// Consultas BD2: SQL lido de database/04_consultas_bd2.sql (mesmo texto do psql), com o
+// período em $1 e $2. Devolve { inicio, fim, linhas } para o front mostrar o período usado.
+async function consultaBd2(nome, periodo, camposNumericos) {
+  const { inicio, fim } = await resolverPeriodo(periodo);
+  const { rows } = await query(CONSULTAS_BD2[nome], [inicio, fim]);
+  return { inicio, fim, linhas: numerico(rows, camposNumericos) };
 }
 
-export async function topPecas30Dias() {
-  const { rows } = await query(CONSULTAS_BD2['top-pecas']);
-  return numerico(rows, ['qtd_consumida', 'qtd_os', 'custo_estimado']);
-}
-
-export async function paretoCausas() {
-  const { rows } = await query(CONSULTAS_BD2['pareto-causas']);
-  return numerico(rows, ['qtd', 'pct', 'pct_acumulado']);
-}
+export const mttrAcimaDaMedia = (periodo) => consultaBd2('mttr-acima-media', periodo, ['mttr_h', 'mttr_medio_h']);
+export const topPecas = (periodo) => consultaBd2('top-pecas', periodo, ['qtd_consumida', 'qtd_os', 'custo_estimado']);
+export const paretoCausas = (periodo) => consultaBd2('pareto-causas', periodo, ['qtd', 'pct', 'pct_acumulado']);
