@@ -394,7 +394,7 @@ O Mini-CMMS é um sistema **interno** de uma fábrica, não um serviço público
    O comprimento de uma barra representa o valor, então ela **precisa começar no zero**. Como todos os equipamentos estão entre 92% e 96%, barras de 0 a 100% ficariam praticamente iguais, e cortar o eixo em 90% exageraria as diferenças. Com pontos, o que importa é a **posição**, então o eixo pode começar perto dos valores (o subtítulo diz onde ele começa) sem distorcer a leitura.
 
 3. *O filtro de período muda todos os gráficos?*
-   Não, e a tela deixa isso explícito. O período é passado para a função `sp_kpis_equipamento(inicio, fim)`, que alimenta os totais e os gráficos de MTTR e disponibilidade. As consultas BD2 (Pareto, top 5 peças, MTTR acima da média) são o **mesmo SQL** do arquivo `04_consultas_bd2.sql`, com janelas fixas (todas as OS, 30 dias, 90 dias), e cada bloco informa a sua janela no subtítulo. Parametrizar essas consultas é possível, mas mudaria o SQL entregue para a disciplina de BD2.
+   Não, e a tela deixa isso explícito. O período é passado para a função `sp_kpis_equipamento(inicio, fim)`, que alimenta os totais e os gráficos de MTTR e disponibilidade. As consultas BD2 (Pareto, top 5 peças, MTTR acima da média) são o **mesmo SQL** do arquivo `04_consultas_bd2.sql`, com janelas fixas (todas as OS, 30 dias, 90 dias), e cada bloco informa a sua janela no subtítulo. Parametrizar essas consultas é possível, mas mudaria o SQL entregue para a disciplina de BD2. *(Atualização da #34: as três consultas passaram a receber o período em `$1`/`$2`, e hoje o filtro vale para todos os blocos, menos o "Agora".)*
 
 ---
 
@@ -418,6 +418,29 @@ O Mini-CMMS é um sistema **interno** de uma fábrica, não um serviço público
 
 3. *Se o Sonar apontou um problema, por que não corrigir todos? Por que ignorar dois?*
    Porque a ferramenta pode errar, e quem decide é quem conhece o código. O `| 0` do gerador mulberry32 é intencional (faz o *overflow* de 32 bits do algoritmo; `Math.trunc` mudaria a sequência). A regra "use VARCHAR2" é do Oracle e não existe no PostgreSQL. Os dois foram marcados **com a justificativa escrita**, no código e no `sonar-project.properties`, para que o revisor veja o motivo. Ignorar sem explicar seria esconder o problema.
+
+---
+
+## Ajustes finais de interface (issue #34)
+
+**O que foi feito**
+
+1. No dashboard, os rótulos de técnica SQL e os textos explicativos longos saíram da tela. Cada bloco ganhou um ícone ⓘ cujo tooltip mostra a técnica SQL e a explicação. Ele abre com o mouse e com o teclado (Tab), continua aberto com o ponteiro sobre o texto, fecha com Esc e é a descrição do botão (`aria-describedby`) para leitores de tela.
+2. Top 5 peças, Pareto e MTTR acima da média agora seguem o filtro 30/90/180 dias. As três consultas de `04_consultas_bd2.sql` recebem `$1`/`$2`, e a API passa as datas como parâmetros. No psql, o `\bind` manda os mesmos valores, com padrão de 90 dias calculado no cabeçalho do arquivo.
+3. Os subtítulos mostram o período usado, que a API devolve junto das linhas (`{ inicio, fim, linhas }`). Se o período for trocado rápido, as respostas antigas são descartadas.
+4. O "1 analysis warning" do SonarCloud na `main` não era o `fetch-depth` (já era `0`). Era o analisador PL/SQL do Oracle lendo os `.sql` do PostgreSQL. Os `.sql` saíram da análise, com a justificativa no `sonar-project.properties`.
+5. Conferido no navegador: o seletor de peça do fechamento mostra código, estoque e o começo da descrição sem corte.
+
+**Perguntas prováveis**
+
+1. *Por que `$1` e `$2` em vez de montar a data dentro do texto do SQL?*
+   Porque o valor nunca vira parte do comando: o banco recebe o SQL e os parâmetros separados, e não há como uma data maliciosa mudar a consulta (SQL injection). O plano também pode ser reaproveitado. As datas ainda são validadas na rota (formato `AAAA-MM-DD`, data real, início ≤ fim) antes de chegar ao banco.
+
+2. *Como o mesmo arquivo roda no psql, se o psql não sabe o que é `$1`?*
+   O comando `\bind` do psql (versão 16+) define os valores dos parâmetros da próxima consulta, e o psql usa o protocolo estendido, igual ao driver `pg` da API. O cabeçalho calcula o padrão (`SELECT CURRENT_DATE - 90 ... \gset`) só se `data_ini`/`data_fim` não vierem por `-v`. A API ignora tudo o que vem antes do primeiro `-- @consulta` e as linhas que começam com `\`, então os dois rodam exatamente o mesmo SQL.
+
+3. *Tirar os `.sql` do SonarCloud não é esconder problema?*
+   Não, porque o SonarCloud não analisa PostgreSQL: ele trata os arquivos como PL/SQL do Oracle, não consegue ler a sintaxe (16 erros de parse), pede uma conexão com um banco Oracle (o aviso) e aplica regras do Oracle (a única que apontou algo era falso positivo). O SQL continua verificado por ferramentas que entendem PostgreSQL: a CI aplica os scripts num PostgreSQL 18 real e roda as consultas no psql, e os testes da API conferem triggers, função e procedure com números calculados à mão.
 
 ---
 

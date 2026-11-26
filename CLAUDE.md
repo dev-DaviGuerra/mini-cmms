@@ -39,7 +39,8 @@ Automatic Analysis fica desligada). Dependabot em `.github/dependabot.yml`. Rela
 `docs/qss-relatorio.md`. Na CI, `LOGIN_RATE_LIMIT_MAX=100` (os testes fazem mais de 10 logins).
 Não usar `// NOSONAR` nem ignorar regra sem justificativa escrita no código ou no properties.
 No novo escopo do SonarCloud, `sonar.sources`/`sonar.tests` não têm efeito: o escopo se ajusta
-só com `sonar.exclusions` e `sonar.coverage.exclusions`. Actions do workflow fixadas por SHA
+só com `sonar.exclusions` e `sonar.coverage.exclusions`. Os `.sql` ficam fora da análise (#34): o
+SonarCloud os lê como PL/SQL do Oracle, o que gerava o aviso do Data Dictionary e erros de parse. Actions do workflow fixadas por SHA
 completo (S7637) e `npm ci --ignore-scripts` (S6505).
 
 Fora do escopo (só se o usuário pedir): cancelamento de OS, entrada de nota, cadastro aberto
@@ -107,7 +108,9 @@ Fora do escopo (só se o usuário pedir): cancelamento de OS, entrada de nota, c
 - `app.set('trust proxy', 1)`: a API roda atrás de 1 proxy (NGINX) no deploy.
 - Consultas BD2: a fonte única é `database/04_consultas_bd2.sql`. Cada consulta começa com
   `-- @consulta <nome>` e é exposta em `/api/kpis/<nome>` (`src/consultasBd2.js`). Não copiar
-  o SQL para o JavaScript.
+  o SQL para o JavaScript. As consultas recebem o período em `$1`/`$2` (datas, como em
+  `sp_kpis_equipamento`); no psql os valores vêm de `\bind` (psql 16+), com padrão de 90 dias
+  calculado no cabeçalho do arquivo (`-v data_ini=... -v data_fim=...` para outro período).
 - Testes em `backend/tests/*.test.js`. Cada arquivo cria e remove os próprios dados
   (`tests/helpers.js`).
 
@@ -141,6 +144,9 @@ Fora do escopo (só se o usuário pedir): cancelamento de OS, entrada de nota, c
   e foco visível pelo teclado (`:focus-visible` já está no CSS).
 - Formulários secundários em drawer: HTML `.drawer` com `inert` + `.fundo-drawer`, e a lógica
   vem de `criarDrawer()` de `ui.js` (Esc fecha, Tab preso, foco volta ao botão). Não reimplementar.
+- Explicações e técnica SQL ficam num ícone ⓘ discreto (`.info-dica` > `button.botao-info` com
+  `aria-describedby` + `span[role=tooltip].dica`), ativado por `ativarDicas()` de `ui.js` (hover,
+  foco, Esc, e mantém o texto dentro da janela). Nada de texto explicativo longo na tela.
 - Fluxos que gravam dados (assumir, fechar, cadastrar) são testados no navegador contra uma
   **segunda instância da API** com `NODE_ENV=test PORT=3001`, que usa o `cmms_test`. Um script de
   fixtures no scratchpad cria usuários, equipamento, peças e OS e os apaga no final. Nunca gravar
