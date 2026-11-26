@@ -1,0 +1,96 @@
+# CI do Mini-CMMS: a cada push e pull request, roda os testes do backend num PostgreSQL
+# descartável (service container do próprio Actions, NUNCA o Neon), mede a cobertura com
+# c8 e envia o resultado ao SonarCloud.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+# Privilégio mínimo: o GITHUB_TOKEN só lê o repositório.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  testes:
+    name: Testes + cobertura + SonarCloud
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres # senha de um banco descartável, que só existe durante o job
+          POSTGRES_DB: cmms_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      NODE_ENV: test
+      # localhost => o configConexao() desliga o SSL; DATABASE_URL não é definido, então
+      # não há como os testes tocarem outro banco.
+      DATABASE_URL_TEST: postgres://postgres:postgres@localhost:5432/cmms_test
+      # Os testes fazem mais de 10 logins pelo mesmo IP em 15 min; o padrão de produção
+      # (10) continua valendo fora daqui. É o mesmo ajuste do .env de desenvolvimento.
+      LOGIN_RATE_LIMIT_MAX: 100
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+    steps:
+      # Actions fixadas pelo SHA completo do commit (uma tag pode ser movida; o SHA não).
+      # O Dependabot atualiza os SHAs; o comentário mostra a versão.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # histórico completo: o Sonar usa o blame para saber o que é código novo
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: JWT_SECRET aleatório só para este job
+        run: |
+          segredo=$(openssl rand -hex 48)
+          echo "::add-mask::$segredo"
+          echo "JWT_SECRET=$segredo" >> "$GITHUB_ENV"
+
+      - name: Aplicar o banco (01, 02, 03 e 05)
+        run: |
+          psql "$DATABASE_URL_TEST" -v ON_ERROR_STOP=1 \
+            -f database/01_schema.sql \
+            -f database/02_triggers.sql \
+            -f database/03_procedures.sql \
+            -f database/05_usuarios_ativo.sql
+
+      # --ignore-scripts: nenhum script de instalação de dependência roda na CI (ataque de
+      # cadeia de suprimentos, Sonar S6505). O bcrypt já traz o binário pronto (prebuilds).
+      - name: Instalar dependências do backend
+        working-directory: backend
+        run: npm ci --ignore-scripts
+
+      - name: npm audit (falha com vulnerabilidade alta ou crítica)
+        working-directory: backend
+        run: npm audit --audit-level=high
+
+      - name: Testes com cobertura (c8 => backend/coverage/lcov.info)
+        working-directory: backend
+        run: npm run test:cobertura
+
+      - name: Conferir as consultas BD2 no banco de teste
+        run: psql "$DATABASE_URL_TEST" -v ON_ERROR_STOP=1 -q -o /dev/null -f database/04_consultas_bd2.sql
+
+      # Sem o secret (ex.: PR vindo de fork), os testes rodam e só a análise é pulada.
+      - name: Análise SonarCloud
+        if: env.SONAR_TOKEN != ''
+        uses: SonarSource/sonarqube-scan-action@59202af334b4ba7b5db01b701b8e79f8b3bef0f4 # v8.5.0

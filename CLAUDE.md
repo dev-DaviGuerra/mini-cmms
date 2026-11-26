@@ -32,8 +32,18 @@ Referência completa: `Mini-CMMS_Projeto_AVD2.pdf` (local, fora do git).
   (eixo cortado só com pontos); referências em tinta neutra tracejada; tabela de dados sob cada
   gráfico.
 
+**Qualidade (#12):** CI no GitHub Actions (`.github/workflows/ci.yml`) com PostgreSQL 18 em
+service container (nunca o Neon na CI), `npm audit --audit-level=high`, `npm run test:cobertura`
+(c8 => `backend/coverage/lcov.info`) e SonarCloud pela CI (`sonar-project.properties`; a
+Automatic Analysis fica desligada). Dependabot em `.github/dependabot.yml`. Relatório em
+`docs/qss-relatorio.md`. Na CI, `LOGIN_RATE_LIMIT_MAX=100` (os testes fazem mais de 10 logins).
+Não usar `// NOSONAR` nem ignorar regra sem justificativa escrita no código ou no properties.
+No novo escopo do SonarCloud, `sonar.sources`/`sonar.tests` não têm efeito: o escopo se ajusta
+só com `sonar.exclusions` e `sonar.coverage.exclusions`. Actions do workflow fixadas por SHA
+completo (S7637) e `npm ci --ignore-scripts` (S6505).
+
 Fora do escopo (só se o usuário pedir): cancelamento de OS, entrada de nota, cadastro aberto
-(autocadastro) de usuários, deploy, SonarCloud, artigo, slides.
+(autocadastro) de usuários, deploy, artigo, slides.
 
 **Segurança de usuários (#28):**
 - Nunca apagar usuário, só desativar.
@@ -146,4 +156,5 @@ psql "$DATABASE_URL_TEST" -f database/01_schema.sql -f database/02_triggers.sql 
 cd database && npm install && npm run seed
 psql "$DATABASE_URL" -f database/04_consultas_bd2.sql
 cd backend && npm test && npm start
+cd backend && npm run test:cobertura   # cobertura (c8, lcov em backend/coverage/)
 ```

@@ -398,6 +398,29 @@ O Mini-CMMS é um sistema **interno** de uma fábrica, não um serviço público
 
 ---
 
+## Etapa 12 — CI, SonarCloud com cobertura e segurança (issue #12)
+
+**O que foi feito**
+
+1. **CI no GitHub Actions** (`.github/workflows/ci.yml`): a cada push e PR, sobe um PostgreSQL 18 em *service container*, aplica os scripts 01, 02, 03 e 05, roda `npm audit`, os 81 testes e as consultas BD2. O Neon nunca é usado na CI.
+2. **Cobertura com c8** (`npm run test:cobertura`): 98,5% das linhas e 90,7% dos ramos de `backend/src`. O `lcov.info` vai para o SonarCloud, que passou da *Automatic Analysis* para a análise pela CI (a automática não recebe cobertura, por isso mostrava 0,0%). No Sonar a cobertura ficou em **96,8%** e o Quality Gate passou.
+3. **Issues abertas no Sonar corrigidas:** log injection no erro 500 (S5145), `main()` sem `await` no seed (S9383); o `| 0` do mulberry32 (S7767) e o `CHAR` do schema (regra do Oracle) foram justificados como não aplicáveis.
+4. **Dependências e segredos:** actions fixadas por SHA e `npm ci --ignore-scripts` (apontados pelo próprio Sonar no workflow), `npm audit` zerado nos três pacotes (com `overrides` para `glob`/`minimatch`), Dependabot semanal para npm e Actions, e varredura do histórico do git sem nenhum segredo.
+5. A CI achou um problema real: os testes dependiam do `LOGIN_RATE_LIMIT_MAX=100` do `.env` local. Tudo está consolidado em `docs/qss-relatorio.md`.
+
+**Perguntas prováveis**
+
+1. *Por que a CI usa um PostgreSQL próprio e não o Neon?*
+   Porque a CI precisa ser **reprodutível e isolada**: cada execução começa com um banco vazio, aplica os scripts do repositório e é destruída no fim. Assim os testes provam que os scripts SQL funcionam do zero, em PostgreSQL padrão (a mesma portabilidade exigida para a VM da Azure), e nenhuma credencial do Neon precisa ir para o GitHub. Execuções paralelas também não disputam o mesmo banco.
+
+2. *98,5% de cobertura quer dizer que o sistema não tem bugs?*
+   Não. Cobertura mede quais linhas **foram executadas** pelos testes, não se o resultado foi conferido. Um teste sem `assert` também "cobre" o código. Ela serve para achar o que **nunca** é testado (aqui, por exemplo, alguns erros de configuração no `config.js`). A qualidade vem das asserções: os testes conferem status HTTP, corpo da resposta, estoque, auditoria e rollback no banco real.
+
+3. *Se o Sonar apontou um problema, por que não corrigir todos? Por que ignorar dois?*
+   Porque a ferramenta pode errar, e quem decide é quem conhece o código. O `| 0` do gerador mulberry32 é intencional (faz o *overflow* de 32 bits do algoritmo; `Math.trunc` mudaria a sequência). A regra "use VARCHAR2" é do Oracle e não existe no PostgreSQL. Os dois foram marcados **com a justificativa escrita**, no código e no `sonar-project.properties`, para que o revisor veja o motivo. Ignorar sem explicar seria esconder o problema.
+
+---
+
 ## Segurança (QSS)
 
 Registro das correções e dos controles de segurança, para o relatório do QSS.

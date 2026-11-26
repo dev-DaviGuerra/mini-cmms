@@ -40,7 +40,9 @@ function configConexao(url) {
 // ---------------------------------------------------------------------
 function mulberry32(seed) {
   return () => {
-    seed = (seed + 0x6d2b79f5) | 0;
+    // "| 0" é intencional: reduz a soma a inteiro de 32 bits (overflow circular), que é o
+    // que o mulberry32 exige. Math.trunc não faz isso, e mudaria a sequência gerada.
+    seed = (seed + 0x6d2b79f5) | 0; // NOSONAR (S7767)
     let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
@@ -392,4 +394,4 @@ async function main() {
   }
 }
 
-main();
+await main();
